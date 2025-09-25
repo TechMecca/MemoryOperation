@@ -15,7 +15,9 @@ endif()
 
 add_subdirectory(External/Detours)  # defines target: detours       (and alias Detours::Detours) (IMPORTED GLOBAL) + detours_ep
 add_subdirectory(MemoryOperation)   # defines target: MemoryOperation (and alias MemoryOperation::MemoryOperation) (STATIC)
+
 add_dependencies(MemoryOperation Detours)
+
 target_link_libraries(MemoryOperation PUBLIC Detours::Detours)
 
 
