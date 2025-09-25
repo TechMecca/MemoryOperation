@@ -31,7 +31,12 @@ WinDetour* MemoryOperator::CreateDetour(const std::string& name, PVOID* targetAd
     auto& instance = GetInstance();
 
     if (instance.operations.find(name) != instance.operations.end()) {
-        return nullptr; // Name already exists
+        std::cerr << "CreateDetour: name '" << name << "' already exists\n";
+        return nullptr;
+    }
+    if (!targetAddress || !*targetAddress || !detourFunction) {
+        std::cerr << "CreateDetour: null targetAddress/*targetAddress or detourFunction for '" << name << "'\n";
+        return nullptr;
     }
 
     try {
@@ -40,24 +45,37 @@ WinDetour* MemoryOperator::CreateDetour(const std::string& name, PVOID* targetAd
         instance.operations[name] = std::move(detour);
         return ptr;
     }
-    catch (const std::exception&) {
+    catch (const std::exception& e) {
+        std::cerr << "CreateDetour: exception for '" << name << "': " << e.what() << "\n";
         return nullptr;
     }
 }
 
 WinDetour* MemoryOperator::CreateDetour(const std::string& name, uintptr_t target_addr, uintptr_t detour_addr)
 {
+    auto& instance = GetInstance();
+
+    if (instance.operations.find(name) != instance.operations.end()) {
+        std::cerr << "CreateDetour(raw): name '" << name << "' already exists\n";
+        return nullptr;
+    }
+    if (!target_addr || !detour_addr) {
+        std::cerr << "CreateDetour(raw): null target/detour for '" << name << "'\n";
+        return nullptr;
+    }
+
     try {
         auto detour = std::make_unique<WinDetour>(target_addr, detour_addr);
         WinDetour* ptr = detour.get();
-        GetInstance().operations[name] = std::move(detour);
+        instance.operations[name] = std::move(detour);
         return ptr;
     }
     catch (const std::exception& e) {
-        std::cerr << "Failed to create detour '" << name << "': " << e.what() << std::endl;
+        std::cerr << "CreateDetour(raw): exception for '" << name << "': " << e.what() << "\n";
         return nullptr;
     }
 }
+
 Patch* MemoryOperator::FindPatch(const std::string& name)
 {
     auto& instance = GetInstance();
