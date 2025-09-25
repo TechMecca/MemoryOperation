@@ -6,8 +6,9 @@
 class WinDetour : public MemoryOperation
 {
 public:
-    // Constructor for detouring a function to another function
-    WinDetour(PVOID* targetAddress, PVOID detourFunction);
+    // Two constructors for flexibility
+    WinDetour(PVOID* targetAddress, PVOID detourFunction);  // For Detours-style (PVOID*)
+    WinDetour(uintptr_t targetAddress, uintptr_t detourFunction);  // For direct addresses
 
     ~WinDetour();
 
@@ -15,7 +16,6 @@ public:
     bool Restore() override;
     size_t GetLength() const override;
 
-    // Get the trampoline function to call the original
     template<typename T>
     T GetTrampoline() const {
         return reinterpret_cast<T>(trampoline_addr);
@@ -26,8 +26,9 @@ public:
 private:
     uintptr_t detour_addr = 0;
     uintptr_t trampoline_addr = 0;
-    void* target_ptr = nullptr;
-    void* detour_ptr = nullptr;
+    PVOID* target_ptr = nullptr;  // Changed to PVOID*
+    PVOID detour_ptr = nullptr;
 
     void BackupOriginalBytes();
+    void InitializeFromAddresses(uintptr_t targetAddress, uintptr_t detourFunction);
 };

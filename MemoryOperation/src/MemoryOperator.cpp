@@ -44,6 +44,21 @@ WinDetour* MemoryOperator::CreateDetour(const std::string& name, PVOID* targetAd
         return nullptr;
     }
 }
+
+WinDetour* MemoryOperator::CreateDetour(const std::string& name, uintptr_t target_addr, uintptr_t detour_addr)
+{
+    // Use the address-based constructor
+    try {
+        auto detour = std::make_unique<WinDetour>(target_addr, detour_addr);
+        WinDetour* ptr = detour.get();
+        GetInstance().operations[name] = std::move(detour);
+        return ptr;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Failed to create detour '" << name << "': " << e.what() << std::endl;
+        return nullptr;
+    }
+}
 Patch* MemoryOperator::FindPatch(const std::string& name)
 {
     auto& instance = GetInstance();
