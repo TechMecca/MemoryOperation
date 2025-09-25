@@ -47,7 +47,6 @@ WinDetour* MemoryOperator::CreateDetour(const std::string& name, PVOID* targetAd
 
 WinDetour* MemoryOperator::CreateDetour(const std::string& name, uintptr_t target_addr, uintptr_t detour_addr)
 {
-    // Use the address-based constructor
     try {
         auto detour = std::make_unique<WinDetour>(target_addr, detour_addr);
         WinDetour* ptr = detour.get();
