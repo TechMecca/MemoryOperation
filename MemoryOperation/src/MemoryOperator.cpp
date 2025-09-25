@@ -26,7 +26,7 @@ Patch* MemoryOperator::CreatePatch(const std::string& name, uintptr_t address, c
     }
 }
 
-WinDetour* MemoryOperator::CreateDetour(const std::string& name, uintptr_t target_addr, uintptr_t detour_addr)
+WinDetour* MemoryOperator::CreateDetour(const std::string& name, PVOID* targetAddress, PVOID detourFunction)
 {
     auto& instance = GetInstance();
 
@@ -35,7 +35,7 @@ WinDetour* MemoryOperator::CreateDetour(const std::string& name, uintptr_t targe
     }
 
     try {
-        auto detour = std::make_unique<WinDetour>(target_addr, detour_addr);
+        auto detour = std::make_unique<WinDetour>(targetAddress, detourFunction);
         WinDetour* ptr = detour.get();
         instance.operations[name] = std::move(detour);
         return ptr;
@@ -44,7 +44,6 @@ WinDetour* MemoryOperator::CreateDetour(const std::string& name, uintptr_t targe
         return nullptr;
     }
 }
-
 Patch* MemoryOperator::FindPatch(const std::string& name)
 {
     auto& instance = GetInstance();

@@ -6,11 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(ARCH_SUFFIX "x64")
-else()
-    set(ARCH_SUFFIX "x86")
-endif()
 
 
 add_subdirectory(External/Detours)  # defines target: detours       (and alias Detours::Detours) (IMPORTED GLOBAL) + detours_ep

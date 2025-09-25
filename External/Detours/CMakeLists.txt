@@ -24,7 +24,7 @@ set(DETOURS_OUT_INC  "${DETOURS_REPO_DIR}/include")
 
 file(MAKE_DIRECTORY "${DETOURS_OUT_INC}")
 
-ExternalProject_Add(detours_lp
+ExternalProject_Add(detours_ep
         GIT_REPOSITORY      ${DETOURS_GIT_REPO}
         GIT_TAG             ${DETOURS_GIT_TAG}
         GIT_PROGRESS        ON
@@ -44,7 +44,7 @@ set_target_properties(Detours PROPERTIES
         IMPORTED_LOCATION             "${DETOURS_OUT_LIB}"
         INTERFACE_INCLUDE_DIRECTORIES "${DETOURS_OUT_INC}"
 )
-add_dependencies(Detours detours_lp)
+add_dependencies(Detours detours_ep)
 
 # Nice namespaced alias
 add_library(Detours::Detours ALIAS Detours)

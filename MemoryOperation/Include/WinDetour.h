@@ -7,11 +7,7 @@ class WinDetour : public MemoryOperation
 {
 public:
     // Constructor for detouring a function to another function
-    WinDetour(uintptr_t target_addr, uintptr_t detour_addr);
-
-    // Constructor for detouring with std::function (for lambdas/member functions)
-    template<typename T>
-    WinDetour(uintptr_t target_addr, T&& detour_func);
+    WinDetour(PVOID* targetAddress, PVOID detourFunction);
 
     ~WinDetour();
 
@@ -33,6 +29,5 @@ private:
     void* target_ptr = nullptr;
     void* detour_ptr = nullptr;
 
-    void InitializeDetour(uintptr_t target_addr, uintptr_t detour_addr);
     void BackupOriginalBytes();
 };

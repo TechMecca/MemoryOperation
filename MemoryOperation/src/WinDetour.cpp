@@ -2,43 +2,27 @@
 #include <stdexcept>
 #include <iostream>
 
-// Template constructor implementation (header-only)
-template<typename T>
-WinDetour::WinDetour(uintptr_t target_addr, T&& detour_func)
+WinDetour::WinDetour(PVOID* targetAddress, PVOID detourFunction)
 {
-    // Store the detour function in a persistent object
-    static auto persistent_func = std::forward<T>(detour_func);
-    uintptr_t detour_addr = reinterpret_cast<uintptr_t>(+[]() { persistent_func(); });
-
-    InitializeDetour(target_addr, detour_addr);
-}
-
-WinDetour::WinDetour(uintptr_t target_addr, uintptr_t detour_addr)
-{
-    InitializeDetour(target_addr, detour_addr);
-}
-
-void WinDetour::InitializeDetour(uintptr_t target_addr, uintptr_t detour_addr)
-{
-    if (target_addr == 0 || detour_addr == 0) {
-        throw std::invalid_argument("Target and detour addresses cannot be null");
+    if (!targetAddress || !detourFunction) {
+        throw std::invalid_argument("Target address and detour function cannot be null");
     }
 
-    address = target_addr;
-    this->detour_addr = detour_addr;
-    target_ptr = reinterpret_cast<void*>(target_addr);
-    detour_ptr = reinterpret_cast<void*>(detour_addr);
+    // Store the addresses
+    this->target_ptr = targetAddress;
+    this->detour_ptr = detourFunction;
+    this->address = reinterpret_cast<uintptr_t>(*targetAddress);
 
-    // Initialize Detours (but don't apply the hook yet)
-    DetourRestoreAfterWith();
 
-    // Backup the original bytes that will be overwritten when we apply the detour
+
+    // Backup original bytes
     BackupOriginalBytes();
 
     std::cout << "Detour prepared (not applied):\n";
     std::cout << "  Target: 0x" << std::hex << address << "\n";
     std::cout << "  Detour: 0x" << std::hex << detour_addr << "\n";
 }
+
 
 void WinDetour::BackupOriginalBytes()
 {
