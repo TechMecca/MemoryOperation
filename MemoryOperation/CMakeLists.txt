@@ -3,7 +3,12 @@
 target_sources(MemoryOperation PUBLIC
        
        "src/PatternScanner.cpp"
-       "src/Patch.cpp" "Include/WinDetour.h" "src/WinDetour.cpp" "src/MemoryOperation.cpp" "Include/Memory.h" "src/Memory.cpp")
+       "src/Patch.cpp" 
+       "src/WinDetour.cpp" 
+       "src/MemoryOperation.cpp"
+       "src/Memory.cpp"
+       "src/MemoryOperator.cpp"
+)
 
 target_include_directories(MemoryOperation PUBLIC
     "Include"

@@ -200,3 +200,4 @@ bool MemoryOperator::Exists(const std::string& name) const
 {
     return operations.find(name) != operations.end();
 }
+
