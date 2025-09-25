@@ -11,26 +11,24 @@ class MemoryOperator
 public:
     static MemoryOperator& GetInstance();
 
-    // Add operations
-    bool AddPatch(const std::string& name, uintptr_t address, const std::vector<byte>& bytes);
-    bool AddDetour(const std::string& name, uintptr_t target_addr, uintptr_t detour_addr);
+    // Create, auto-add to manager, and return direct pointer
+    static Patch* CreatePatch(const std::string& name, uintptr_t address, const std::vector<byte>& bytes);
+    static WinDetour* CreateDetour(const std::string& name, uintptr_t target_addr, uintptr_t detour_addr);
 
     // Template version for detours with callables
     template<typename T>
-    bool AddDetour(const std::string& name, uintptr_t target_addr, T&& detour_func);
+    static WinDetour* CreateDetour(const std::string& name, uintptr_t target_addr, T&& detour_func);
 
-    // Remove operations
+    // Management functions
     bool RemoveOperation(const std::string& name);
     void RemoveAllOperations();
 
-    // Find operations
-    std::shared_ptr<MemoryOperation> FindOperation(const std::string& name);
-    std::shared_ptr<Patch> FindPatch(const std::string& name);
-    std::shared_ptr<WinDetour> FindDetour(const std::string& name);
+    // Find operations - return direct pointers
+    MemoryOperation* FindOperation(const std::string& name);
+    Patch* FindPatch(const std::string& name);
+    WinDetour* FindDetour(const std::string& name);
 
-    // Apply/Restore operations
-    bool ApplyOperation(const std::string& name);
-    bool RestoreOperation(const std::string& name);
+    // Batch operations
     bool ApplyAll();
     bool RestoreAll();
 
@@ -40,14 +38,25 @@ public:
     void PrintAllOperations() const;
     bool Exists(const std::string& name) const;
 
-    // Get all operations
-    const std::map<std::string, std::shared_ptr<MemoryOperation>>& GetAllOperations() const {
-        return operations;
-    }
-
 private:
     MemoryOperator() = default;
     ~MemoryOperator() = default;
 
-    std::map<std::string, std::shared_ptr<MemoryOperation>> operations;
+    std::map<std::string, std::unique_ptr<MemoryOperation>> operations;
 };
+
+// Template implementation
+template<typename T>
+WinDetour* MemoryOperator::CreateDetour(const std::string& name, uintptr_t target_addr, T&& detour_func)
+{
+    try {
+        auto detour = std::make_unique<WinDetour>(target_addr, std::forward<T>(detour_func));
+        WinDetour* ptr = detour.get();
+        GetInstance().operations[name] = std::move(detour);
+        return ptr;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Failed to create detour '" << name << "': " << e.what() << std::endl;
+        return nullptr;
+    }
+}

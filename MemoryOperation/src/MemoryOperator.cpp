@@ -8,65 +8,68 @@ MemoryOperator& MemoryOperator::GetInstance()
     return instance;
 }
 
-bool MemoryOperator::AddPatch(const std::string& name, uintptr_t address, const std::vector<byte>& bytes)
+Patch* MemoryOperator::CreatePatch(const std::string& name, uintptr_t address, const std::vector<byte>& bytes)
 {
-    if (Exists(name)) 
-    {
+    if (GetInstance().Exists(name)) {
         std::cout << "Operation '" << name << "' already exists\n";
-        return false;
+        return nullptr;
     }
 
     if (address == 0 || bytes.empty()) {
         std::cout << "Invalid parameters for patch '" << name << "'\n";
-        return false;
+        return nullptr;
     }
 
-    try {
-        auto patch = std::make_shared<Patch>(address, bytes);
-        operations[name] = patch;
-        std::cout << "Patch '" << name << "' added successfully at 0x" << std::hex << address << std::dec << "\n";
-        return true;
+    try
+    {
+        auto patch = std::make_unique<Patch>(address, bytes);
+        Patch* ptr = patch.get();
+        GetInstance().operations[name] = std::move(patch);
+        std::cout << "Patch '" << name << "' created successfully at 0x" << std::hex << address << std::dec << "\n";
+        return ptr;
     }
     catch (const std::exception& e) {
         std::cerr << "Failed to create patch '" << name << "': " << e.what() << std::endl;
-        return false;
+        return nullptr;
     }
 }
 
-bool MemoryOperator::AddDetour(const std::string& name, uintptr_t target_addr, uintptr_t detour_addr)
+WinDetour* MemoryOperator::CreateDetour(const std::string& name, uintptr_t target_addr, uintptr_t detour_addr)
 {
-    if (Exists(name)) {
+    if (GetInstance().Exists(name)) {
         std::cout << "Operation '" << name << "' already exists\n";
-        return false;
+        return nullptr;
     }
 
     if (target_addr == 0 || detour_addr == 0) {
         std::cout << "Invalid parameters for detour '" << name << "'\n";
-        return false;
+        return nullptr;
     }
 
     try {
-        auto detour = std::make_shared<WinDetour>(target_addr, detour_addr);
-        operations[name] = detour;
-        std::cout << "Detour '" << name << "' added successfully (target: 0x" << std::hex << target_addr
+        auto detour = std::make_unique<WinDetour>(target_addr, detour_addr);
+        WinDetour* ptr = detour.get();
+        GetInstance().operations[name] = std::move(detour);
+        std::cout << "Detour '" << name << "' created successfully (target: 0x" << std::hex << target_addr
             << ", detour: 0x" << detour_addr << ")\n" << std::dec;
-        return true;
+        return ptr;
     }
     catch (const std::exception& e) {
         std::cerr << "Failed to create detour '" << name << "': " << e.what() << std::endl;
-        return false;
+        return nullptr;
     }
 }
 
 bool MemoryOperator::RemoveOperation(const std::string& name)
 {
-    auto it = operations.find(name);
-    if (it != operations.end()) {
+    auto& instance = GetInstance();
+    auto it = instance.operations.find(name);
+    if (it != instance.operations.end()) {
         // Auto-restore if applied
         if (it->second->is_modified) {
             it->second->Restore();
         }
-        operations.erase(it);
+        instance.operations.erase(it);
         std::cout << "Operation '" << name << "' removed successfully\n";
         return true;
     }
@@ -76,85 +79,57 @@ bool MemoryOperator::RemoveOperation(const std::string& name)
 
 void MemoryOperator::RemoveAllOperations()
 {
-    for (auto& [name, op] : operations) {
+    auto& instance = GetInstance();
+    for (auto& [name, op] : instance.operations) {
         if (op->is_modified) {
             op->Restore();
         }
     }
-    operations.clear();
+    instance.operations.clear();
     std::cout << "All operations removed\n";
 }
 
-std::shared_ptr<MemoryOperation> MemoryOperator::FindOperation(const std::string& name)
+MemoryOperation* MemoryOperator::FindOperation(const std::string& name)
 {
-    auto it = operations.find(name);
-    if (it != operations.end()) {
-        return it->second;
+    auto& instance = GetInstance();
+    auto it = instance.operations.find(name);
+    if (it != instance.operations.end()) {
+        return it->second.get();
     }
     return nullptr;
 }
 
-std::shared_ptr<Patch> MemoryOperator::FindPatch(const std::string& name)
+Patch* MemoryOperator::FindPatch(const std::string& name)
 {
-    auto op = FindOperation(name);
+    MemoryOperation* op = FindOperation(name);
     if (op) {
-        return std::dynamic_pointer_cast<Patch>(op);
+        return dynamic_cast<Patch*>(op);
     }
     return nullptr;
 }
 
-std::shared_ptr<WinDetour> MemoryOperator::FindDetour(const std::string& name)
+WinDetour* MemoryOperator::FindDetour(const std::string& name)
 {
-    auto op = FindOperation(name);
+    MemoryOperation* op = FindOperation(name);
     if (op) {
-        return std::dynamic_pointer_cast<WinDetour>(op);
+        return dynamic_cast<WinDetour*>(op);
     }
     return nullptr;
-}
-
-bool MemoryOperator::ApplyOperation(const std::string& name)
-{
-    auto op = FindOperation(name);
-    if (!op) {
-        std::cout << "Operation '" << name << "' not found\n";
-        return false;
-    }
-
-    if (op->Apply()) {
-        std::cout << "Operation '" << name << "' applied successfully\n";
-        return true;
-    }
-
-    std::cout << "Failed to apply operation '" << name << "'\n";
-    return false;
-}
-
-bool MemoryOperator::RestoreOperation(const std::string& name)
-{
-    auto op = FindOperation(name);
-    if (!op)
-    {
-        std::cout << "Operation '" << name << "' not found\n";
-        return false;
-    }
-
-    if (op->Restore()) {
-        std::cout << "Operation '" << name << "' restored successfully\n";
-        return true;
-    }
-
-    std::cout << "Failed to restore operation '" << name << "'\n";
-    return false;
 }
 
 bool MemoryOperator::ApplyAll()
 {
+    auto& instance = GetInstance();
     bool all_success = true;
-    for (auto& [name, op] : operations) {
+
+    for (auto& [name, op] : instance.operations) {
         if (!op->is_modified) {
             if (!op->Apply()) {
                 std::cout << "Failed to apply operation '" << name << "'\n";
                 all_success = false;
+            }
+            else {
+                std::cout << "Applied operation '" << name << "'\n";
             }
         }
     }
@@ -163,12 +138,17 @@ bool MemoryOperator::ApplyAll()
 
 bool MemoryOperator::RestoreAll()
 {
+    auto& instance = GetInstance();
     bool all_success = true;
-    for (auto& [name, op] : operations) {
+
+    for (auto& [name, op] : instance.operations) {
         if (op->is_modified) {
             if (!op->Restore()) {
                 std::cout << "Failed to restore operation '" << name << "'\n";
                 all_success = false;
+            }
+            else {
+                std::cout << "Restored operation '" << name << "'\n";
             }
         }
     }
@@ -193,15 +173,27 @@ size_t MemoryOperator::GetAppliedCount() const
 
 void MemoryOperator::PrintAllOperations() const
 {
-    std::cout << "\n=== Memory Operations (" << operations.size() << " total) ===\n";
+    std::cout << "\n=== Memory Operations (" << operations.size() << " total, "
+        << GetAppliedCount() << " applied) ===\n";
+
     for (const auto& [name, op] : operations) {
         std::cout << "Name: " << name;
-        std::cout << " | Type: " << (dynamic_cast<Patch*>(op.get()) ? "Patch" : "Detour");
+
+        if (dynamic_cast<Patch*>(op.get())) {
+            std::cout << " | Type: Patch";
+        }
+        else if (dynamic_cast<WinDetour*>(op.get())) {
+            std::cout << " | Type: Detour";
+        }
+        else {
+            std::cout << " | Type: Unknown";
+        }
+
         std::cout << " | Address: 0x" << std::hex << op->address;
         std::cout << " | Applied: " << (op->is_modified ? "Yes" : "No");
         std::cout << " | Size: " << std::dec << op->GetLength() << " bytes\n";
     }
-    std::cout << "===================================\n\n";
+    std::cout << "==========================================\n\n";
 }
 
 bool MemoryOperator::Exists(const std::string& name) const
