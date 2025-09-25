@@ -4,57 +4,62 @@
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
+#include <iostream> // for minimal logging (avoid in hooks)
 
 #include "MemoryOperation.h"
 
-// Wrapper around Microsoft Detours that supports either a PVOID* (Detours-style)
-// or raw addresses (we create per-instance storage Detours can rewrite).
+// Minimal, safe wrapper around Microsoft Detours.
 class WinDetour : public MemoryOperation
 {
 public:
-    // For Detours-style usage: pass the address of your function-pointer variable
-    // (e.g., &Real_Foo) and the hook function pointer.
-    WinDetour(PVOID* targetAddress, PVOID detourFunction);
+    // Detours-style: pass &Real_Function (address of a function-pointer variable) and your hook.
+    WinDetour(PVOID* targetAddressRef, PVOID detourFunction);
 
-    // For raw addresses: pass the real target address and hook address.
+    // Raw addresses: we create per-instance storage that Detours can rewrite.
     WinDetour(uintptr_t targetAddress, uintptr_t detourFunction);
 
     ~WinDetour();
 
-    bool   Apply()   override;   // attach
-    bool   Restore() override;   // detach
-    size_t GetLength() const override; // retained for your base class; not meaningful for Detours
+    bool   Apply()   override;  // Attach
+    bool   Restore() override;  // Detach
+    size_t GetLength() const override { return 0; } // Not meaningful for Detours
 
     template<typename T>
-    T GetTrampoline() const { // cached trampoline after Apply()
+    T GetTrampoline() const { // cached after Apply()
         return reinterpret_cast<T>(trampoline_addr);
     }
 
-    // Always returns the current "original" function pointer Detours has stored
-    // in the rewritable variable (works even after re-attach).
     template<typename T>
-    T GetOriginal() const {
+    T GetOriginal() const {  // always reflects current Detours state
         return reinterpret_cast<T>(target_ptr ? *target_ptr : nullptr);
     }
 
     bool IsApplied() const { return is_modified; }
 
+    // Tiny thread-local reentrancy guard; use inside your hook.
+    struct ReentryGuard {
+        static thread_local bool tls_in;
+        bool entered_ok;
+        ReentryGuard() : entered_ok(!tls_in) { tls_in = true; }
+        ~ReentryGuard() { tls_in = false; }
+    };
+
 private:
     // Detours-managed pointers
-    PVOID* target_ptr = nullptr;   // points to a function-pointer variable that Detours rewrites
-    PVOID   detour_ptr = nullptr;   // hook function
+    PVOID* target_ptr = nullptr; // -> function-pointer variable that Detours rewrites
+    PVOID   detour_ptr = nullptr; // your hook
 
-    // Per-instance storage used when constructed from raw addresses
+    // Storage used only when constructed from raw addresses
     PVOID   target_storage = nullptr;
 
-    // Informational / diagnostics
+    // Diagnostics
+    uintptr_t target_addr_raw = 0;
     uintptr_t detour_addr = 0;
-    uintptr_t trampoline_addr = 0;  // cached after first successful attach
-    uintptr_t target_addr_raw = 0;  // original target (for logs)
+    uintptr_t trampoline_addr = 0;
 
 private:
     void InitializeFromAddresses(uintptr_t targetAddress, uintptr_t detourFunction);
-    void BackupOriginalBytes(); // bounded & optional; safe even if left unused
 
     static bool DetoursOK(LONG rc, const char* where);
+    static void LogDetoursError(const char* where, LONG rc);
 };

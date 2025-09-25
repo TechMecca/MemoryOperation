@@ -1,36 +1,32 @@
 #include "WinDetour.h"
-#include <algorithm>
 #include <cstring>
-#include <iostream>
 
-static void LogErr(const char* where, LONG rc) {
+thread_local bool WinDetour::ReentryGuard::tls_in = false;
+
+void WinDetour::LogDetoursError(const char* where, LONG rc) {
     std::cerr << where << " failed (rc=" << rc << ")\n";
 }
 
 bool WinDetour::DetoursOK(LONG rc, const char* where) {
     if (rc == NO_ERROR) return true;
-    LogErr(where, rc);
+    LogDetoursError(where, rc);
     return false;
 }
 
-// ---------- Constructors ----------
+// ---------------- Constructors ----------------
 
-WinDetour::WinDetour(PVOID* targetAddress, PVOID detourFunction)
+WinDetour::WinDetour(PVOID* targetAddressRef, PVOID detourFunction)
 {
-    if (!targetAddress || !*targetAddress || !detourFunction) {
-        throw std::invalid_argument("WinDetour: targetAddress/*targetAddress or detourFunction is null");
+    if (!targetAddressRef || !*targetAddressRef || !detourFunction) {
+        throw std::invalid_argument("WinDetour: null targetAddressRef/*targetAddressRef or detourFunction");
     }
 
-    target_ptr = targetAddress;               // Detours will rewrite *target_ptr
+    target_ptr = targetAddressRef;                 // Detours will rewrite *target_ptr
     detour_ptr = detourFunction;
-    target_addr_raw = reinterpret_cast<uintptr_t>(*targetAddress);
+    target_addr_raw = reinterpret_cast<uintptr_t>(*targetAddressRef);
     detour_addr = reinterpret_cast<uintptr_t>(detourFunction);
 
-    // Keep base-class fields consistent (if used elsewhere)
-    address = target_addr_raw;
-
-    // Optional; see comment inside
-    BackupOriginalBytes();
+    address = target_addr_raw; // from MemoryOperation (for consistency)
 
     std::cout << "Detour prepared (ref): target=0x" << std::hex << target_addr_raw
         << " detour=0x" << detour_addr << std::dec << "\n";
@@ -44,10 +40,10 @@ WinDetour::WinDetour(uintptr_t targetAddress, uintptr_t detourFunction)
 void WinDetour::InitializeFromAddresses(uintptr_t targetAddress, uintptr_t detourFunction)
 {
     if (!targetAddress || !detourFunction) {
-        throw std::invalid_argument("WinDetour: target/detour address is null");
+        throw std::invalid_argument("WinDetour: null target/detour address");
     }
 
-    // Per-instance storage that Detours can safely rewrite
+    // Per-instance storage Detours can rewrite safely
     target_storage = reinterpret_cast<PVOID>(targetAddress);
     target_ptr = &target_storage;
     detour_ptr = reinterpret_cast<PVOID>(detourFunction);
@@ -56,56 +52,21 @@ void WinDetour::InitializeFromAddresses(uintptr_t targetAddress, uintptr_t detou
     detour_addr = detourFunction;
     address = target_addr_raw;
 
-    // Optional; see comment inside
-    BackupOriginalBytes();
-
     std::cout << "Detour prepared (raw): target=0x" << std::hex << target_addr_raw
         << " detour=0x" << detour_addr << std::dec << "\n";
 }
 
-// ---------- Back up (optional) ----------
-
-void WinDetour::BackupOriginalBytes()
-{
-    // Detours does safe patching; a backup is not required to detach.
-    // If your MemoryOperation tooling expects it for diagnostics, we copy up to 32 bytes
-    // but only within the committed region to avoid faults.
-    original_bytes.clear();
-
-    MEMORY_BASIC_INFORMATION mbi{};
-    SIZE_T got = VirtualQuery(reinterpret_cast<LPCVOID>(address), &mbi, sizeof(mbi));
-    if (got != sizeof(mbi)) return;
-    if (mbi.State != MEM_COMMIT)   return;
-
-    uintptr_t start = address;
-    uintptr_t region_end = reinterpret_cast<uintptr_t>(mbi.BaseAddress) + static_cast<uintptr_t>(mbi.RegionSize);
-    if (region_end <= start) return;
-
-    const size_t max_copy = 32u;
-    size_t avail = static_cast<size_t>(region_end - start);
-    size_t to_copy = (avail < max_copy) ? avail : max_copy; // **Initialized here** (fix for C2737)
-
-    DWORD old_protection = 0;
-    if (SetMemoryProtection(address, to_copy, PAGE_EXECUTE_READWRITE, &old_protection)) {
-        original_bytes.resize(to_copy);
-        std::memcpy(original_bytes.data(), reinterpret_cast<const void*>(address), to_copy);
-
-        DWORD tmp = 0;
-        SetMemoryProtection(address, to_copy, old_protection, &tmp);
-    }
-}
-
-// ---------- Destructor ----------
+// ---------------- Destructor ----------------
 
 WinDetour::~WinDetour()
 {
     if (is_modified) {
-        // best-effort; don’t throw from dtor
+        // best-effort; do not throw from dtor
         Restore();
     }
 }
 
-// ---------- Apply / Restore ----------
+// ---------------- Apply / Restore ----------------
 
 bool WinDetour::Apply()
 {
@@ -122,7 +83,12 @@ bool WinDetour::Apply()
     }
 
     if (!DetoursOK(DetourTransactionBegin(), "DetourTransactionBegin")) return false;
-    if (!DetoursOK(DetourUpdateThread(GetCurrentThread()), "DetourUpdateThread")) { DetourTransactionAbort(); return false; }
+
+    // IMPORTANT: only update the current thread *unless* you know/want to quiesce all threads.
+    // Updating every thread incorrectly can deadlock if you grab foreign threads that hold locks.
+    if (!DetoursOK(DetourUpdateThread(GetCurrentThread()), "DetourUpdateThread")) {
+        DetourTransactionAbort(); return false;
+    }
 
     if (!DetoursOK(DetourAttach(reinterpret_cast<PVOID*>(target_ptr), detour_ptr), "DetourAttach")) {
         DetourTransactionAbort(); return false;
@@ -132,7 +98,7 @@ bool WinDetour::Apply()
         DetourTransactionAbort(); return false;
     }
 
-    // After successful commit, *target_ptr points to the trampoline (original)
+    // After commit, *target_ptr points to the trampoline (original)
     trampoline_addr = reinterpret_cast<uintptr_t>(*target_ptr);
     is_modified = true;
 
@@ -153,7 +119,9 @@ bool WinDetour::Restore()
     }
 
     if (!DetoursOK(DetourTransactionBegin(), "DetourTransactionBegin")) return false;
-    if (!DetoursOK(DetourUpdateThread(GetCurrentThread()), "DetourUpdateThread")) { DetourTransactionAbort(); return false; }
+    if (!DetoursOK(DetourUpdateThread(GetCurrentThread()), "DetourUpdateThread")) {
+        DetourTransactionAbort(); return false;
+    }
 
     if (!DetoursOK(DetourDetach(reinterpret_cast<PVOID*>(target_ptr), detour_ptr), "DetourDetach")) {
         DetourTransactionAbort(); return false;
@@ -166,12 +134,4 @@ bool WinDetour::Restore()
     is_modified = false;
     std::cout << "Detour restored: target=0x" << std::hex << target_addr_raw << std::dec << "\n";
     return true;
-}
-
-// ---------- Misc ----------
-
-size_t WinDetour::GetLength() const
-{
-    // Detours doesn’t use an inline patch length here; return whatever we backed up
-    return original_bytes.size();
 }
