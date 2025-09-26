@@ -32,8 +32,10 @@ WinDetour::WinDetour(PVOID* targetAddressRef, PVOID detourFunction)
     // original_bytes.assign(bytes.begin(), bytes.end());
 
     if (MemoryOperator::DEBUG) {
+        std::string hex = Memory::BytesToString(original_bytes, 20);
+
         std::cout << std::hex << this->address << "  saved=" << std::dec
-            << original_bytes.size() << " bytes\n";
+            << " Bytes " << hex << " Size 20" << std::endl;
     }
 }
 

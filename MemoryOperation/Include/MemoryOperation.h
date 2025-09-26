@@ -8,8 +8,8 @@ class MemoryOperation
 {
 public:
     uintptr_t address = 0;
-    std::vector<byte> original_bytes{};
-    std::vector<byte> new_bytes{};
+    std::vector<uint8_t> original_bytes{};
+    std::vector<uint8_t> new_bytes{};
     bool is_modified = false;
 
     virtual ~MemoryOperation() = default;

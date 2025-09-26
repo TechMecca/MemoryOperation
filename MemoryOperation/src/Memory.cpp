@@ -63,3 +63,20 @@ uintptr_t Memory::GetModuleAddress(std::string ModuleName)
 
     return NULL;
 }
+
+std::string Memory::BytesToString(const std::vector<uint8_t>& bytes, std::size_t len) {
+    const std::size_t n = (std::min)(len, bytes.size());
+    if (n == 0) return {};
+
+    static const char* HEX = "0123456789ABCDEF";
+    std::string out;
+    out.reserve(n * 3 - 1); // "AA " per byte, minus last space
+
+    for (std::size_t i = 0; i < n; ++i) {
+        uint8_t b = bytes[i];
+        out.push_back(HEX[b >> 4]);
+        out.push_back(HEX[b & 0x0F]);
+        if (i + 1 < n) out.push_back(' ');
+    }
+    return out;
+}
