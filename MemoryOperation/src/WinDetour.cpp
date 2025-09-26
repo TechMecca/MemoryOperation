@@ -6,7 +6,8 @@
 #include "WinDetour.h"
 #include "MemoryOperation.h" // for is_modified, etc.
 
-WinDetour::WinDetour(uintptr_t targetAddress, uintptr_t detourFunction)
+WinDetour::WinDetour(PVOID* targetAddress, PVOID detourFunction) : 
+    targetAddress(targetAddress), HookAddress(detourFunction)
 {
     if (!targetAddress || !detourFunction) {
         throw std::invalid_argument("WinDetour: null targetAddress or detourFunction");
@@ -58,8 +59,7 @@ bool WinDetour::Apply()
         return false;
     }
 
-    PVOID detourPtr = reinterpret_cast<PVOID>(HookAddress);
-    rc = DetourAttach(reinterpret_cast<PVOID*>(&targetStorage), detourPtr);
+    rc = DetourAttach(targetAddress, HookAddress);
     if (rc != NO_ERROR) {
         std::cerr << "DetourAttach failed (rc=" << rc << ")\n";
         DetourTransactionAbort();
@@ -107,8 +107,7 @@ bool WinDetour::Restore()
         return false;
     }
 
-    PVOID detourPtr = reinterpret_cast<PVOID>(HookAddress);
-    rc = DetourDetach(reinterpret_cast<PVOID*>(&targetStorage), detourPtr);
+    rc = DetourDetach(targetAddress, HookAddress);
     if (rc != NO_ERROR) {
         std::cerr << "DetourDetach failed (rc=" << rc << ")\n";
         DetourTransactionAbort();

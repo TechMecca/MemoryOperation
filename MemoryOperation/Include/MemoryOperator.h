@@ -11,7 +11,7 @@ class MemoryOperator
 public:
     static Patch*     CreatePatch(const std::string& name, uintptr_t address, const std::vector<byte>& bytes);
     //static WinDetour* CreateDetour(const std::string& name, PVOID* targetAddress, PVOID detourFunction);
-    static WinDetour* CreateDetour(const std::string& name, uintptr_t target_addr, uintptr_t detour_addr);
+    static WinDetour* CreateDetour(const std::string& name, PVOID* targetAddress, PVOID detourFunction);
 
     static Patch*     FindPatch(const std::string& name);
     static WinDetour* FindDetour(const std::string& name);
