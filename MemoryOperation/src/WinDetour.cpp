@@ -118,26 +118,32 @@ bool WinDetour::Restore()
         std::cerr << "DetourTransactionBegin failed (rc=" << rc << ")\n";
         return false;
     }
+    __try {
 
-    rc = DetourUpdateThread(GetCurrentThread());
-    if (rc != NO_ERROR) {
-        std::cerr << "DetourUpdateThread failed (rc=" << rc << ")\n";
-        DetourTransactionAbort();
-        return false;
+        rc = DetourUpdateThread(GetCurrentThread());
+        if (rc != NO_ERROR) {
+            std::cerr << "DetourUpdateThread failed (rc=" << rc << ")\n";
+            DetourTransactionAbort();
+            return false;
+        }
+
+        rc = DetourDetach((PVOID*)targetAddress, (PVOID)HookAddress);
+        if (rc != NO_ERROR) {
+            std::cerr << "DetourDetach failed (rc=" << rc << ")\n";
+            DetourTransactionAbort();
+            return false;
+        }
+
+        rc = DetourTransactionCommit();
+        if (rc != NO_ERROR) {
+            std::cerr << "DetourTransactionCommit failed (rc=" << rc << ")\n";
+            DetourTransactionAbort();
+            return false;
+        }
     }
-
-    rc = DetourDetach(targetAddress, HookAddress);
-    if (rc != NO_ERROR) {
-        std::cerr << "DetourDetach failed (rc=" << rc << ")\n";
-        DetourTransactionAbort();
-        return false;
-    }
-
-    rc = DetourTransactionCommit();
-    if (rc != NO_ERROR) {
-        std::cerr << "DetourTransactionCommit failed (rc=" << rc << ")\n";
-        DetourTransactionAbort();
-        return false;
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        const unsigned long code = GetExceptionCode();
+		std::cout << "Exception during Detour restore: code=0x" << std::hex << code << std::dec << "\n";
     }
 
     is_modified = false;
