@@ -7,21 +7,22 @@
 #include "MemoryOperation.h" // for is_modified, etc.
 
 WinDetour::WinDetour(uintptr_t targetAddress, uintptr_t detourFunction) :
-    targetAddress(targetAddress), HookAddress(detourFunction)
+    targetAddress((PVOID*)targetAddress), HookAddress((PVOID)detourFunction)
 {
-    if (!targetAddress || !detourFunction) {
-        throw std::invalid_argument("WinDetour: null targetAddress or detourFunction");
-    }
-
-    this->targetAddress = targetAddress;
-    this->HookAddress = detourFunction;
-
-    // Pre-attach: Detours requires a writable variable whose value it will replace
-    // with the trampoline. We keep that variable as a member: targetStorage.
+   
     targetStorage = reinterpret_cast<PVOID>(targetAddress);
 
     std::cout << "Detour prepared (raw): target=0x" << std::hex << this->targetAddress
         << " detour=0x" << this->HookAddress << std::dec << "\n";
+}
+
+WinDetour::WinDetour(PVOID* targetAddress, PVOID detourFunction) :
+    targetAddress(targetAddress), HookAddress((PVOID)detourFunction)
+{
+    targetStorage = reinterpret_cast<PVOID>(targetAddress);
+
+    std::cout << "Detour prepared (raw): target = 0x" << std::hex << this->targetAddress
+        << "\n detour = 0x" << this->HookAddress << "\ntargetStorage = 0x" << targetStorage << std::endl;
 }
 
 WinDetour::~WinDetour()
@@ -107,7 +108,7 @@ bool WinDetour::Restore()
         return false;
     }
 
-    rc = DetourDetach((PVOID*)targetAddress, (PVOID)HookAddress);
+    rc = DetourDetach(targetAddress, HookAddress);
     if (rc != NO_ERROR) {
         std::cerr << "DetourDetach failed (rc=" << rc << ")\n";
         DetourTransactionAbort();

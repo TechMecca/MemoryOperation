@@ -13,6 +13,7 @@ class WinDetour : public MemoryOperation
 {
 public:
     WinDetour(uintptr_t targetAddress, uintptr_t funcAddress);
+    WinDetour(PVOID* targetAddress, PVOID detourFunction);
 
     ~WinDetour();
 
@@ -26,9 +27,9 @@ public:
   
 
 private:
-    uintptr_t   targetAddress;
-    uintptr_t   HookAddress;
-    PVOID       targetStorage;
+    PVOID*    targetAddress;
+    PVOID     HookAddress;
+    PVOID     targetStorage;
 
 
 };
