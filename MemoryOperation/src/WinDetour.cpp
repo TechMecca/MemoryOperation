@@ -90,7 +90,7 @@ bool WinDetour::Apply()
         DetourTransactionAbort(); return false;
     }
 
-    if (!DetoursOK(DetourAttach(reinterpret_cast<PVOID*>(target_ptr), detour_ptr), "DetourAttach")) {
+    if (!DetoursOK(DetourAttach(reinterpret_cast<PVOID*>(detour_addr), detour_ptr), "DetourAttach")) {
         DetourTransactionAbort(); return false;
     }
 
@@ -123,7 +123,7 @@ bool WinDetour::Restore()
         DetourTransactionAbort(); return false;
     }
 
-    if (!DetoursOK(DetourDetach(reinterpret_cast<PVOID*>(target_ptr), detour_ptr), "DetourDetach")) {
+    if (!DetoursOK(DetourDetach(reinterpret_cast<PVOID*>(address), detour_ptr), "DetourDetach")) {
         DetourTransactionAbort(); return false;
     }
 
