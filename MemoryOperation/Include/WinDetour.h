@@ -29,6 +29,7 @@ private:
     PVOID*    targetAddress;
     PVOID     HookAddress;
     PVOID     targetStorage;
+    bool      IsValid();
 
 
 };

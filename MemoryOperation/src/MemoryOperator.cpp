@@ -37,8 +37,10 @@ WinDetour* MemoryOperator::CreateDetour(const std::string& name, uintptr_t targe
     auto& ops = instance.operations;
 
     if (ops.find(name) != ops.end()) {
-        if (override) {
+        if (override)
+        {
             std::cout << "CreateDetour(raw): overriding existing detour '" << name << "'\n";
+
             ops.erase(name);
         }
         else {

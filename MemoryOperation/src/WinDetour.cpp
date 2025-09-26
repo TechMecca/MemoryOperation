@@ -108,9 +108,11 @@ bool WinDetour::Restore()
         return true;
     }
 
-    if (!targetStorage || !HookAddress) {
-        std::cerr << "Restore: invalid state\n";
-        return false;
+    if (!IsValid())
+    {
+        std::cout << "Restore: target memory is invalid - skipping detach\n";
+        is_modified = false;
+        return true; // Consider it successful since there's nothing to restore
     }
 
     LONG rc = DetourTransactionBegin();
@@ -149,4 +151,34 @@ bool WinDetour::Restore()
     is_modified = false;
     std::cout << "Detour restored: target=0x" << std::hex << this->targetAddress << std::dec << "\n";
     return true;
+}
+
+
+bool WinDetour::IsValid()
+{
+    if (targetAddress == nullptr || *targetAddress == nullptr || HookAddress == nullptr) {
+        return false;
+    }
+
+    // Check if the memory is actually accessible and not filled with nulls
+    __try {
+        BYTE first_byte = *((BYTE*)(*targetAddress));
+        // If first byte is 0x00, it's likely invalid memory
+        if (first_byte == 0x00) {
+            return false;
+        }
+
+        // Optional: Check a few more bytes to be more certain
+        // for (int i = 0; i < 4; i++) {
+        //     if (*((BYTE*)(*targetAddress) + i) == 0x00) {
+        //         return false;
+        //     }
+        // }
+
+        return true;
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        // If we get an exception, the memory is not accessible
+        return false;
+    }
 }
