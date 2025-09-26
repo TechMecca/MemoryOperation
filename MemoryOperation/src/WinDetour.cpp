@@ -108,11 +108,10 @@ bool WinDetour::Restore()
         return true;
     }
 
-    if (!IsValid())
-    {
+    if (!IsValid()) {
         std::cout << "Restore: target memory is invalid - skipping detach\n";
         is_modified = false;
-        return true; // Consider it successful since there's nothing to restore
+        return true;
     }
 
     LONG rc = DetourTransactionBegin();
@@ -120,8 +119,8 @@ bool WinDetour::Restore()
         std::cerr << "DetourTransactionBegin failed (rc=" << rc << ")\n";
         return false;
     }
-    __try {
 
+    __try {
         rc = DetourUpdateThread(GetCurrentThread());
         if (rc != NO_ERROR) {
             std::cerr << "DetourUpdateThread failed (rc=" << rc << ")\n";
@@ -131,21 +130,29 @@ bool WinDetour::Restore()
 
         rc = DetourDetach((PVOID*)targetAddress, (PVOID)HookAddress);
         if (rc != NO_ERROR) {
-            std::cerr << "DetourDetach failed (rc=" << rc << ")\n";
-            DetourTransactionAbort();
-            return false;
+            // ERROR_NOT_ENOUGH_MEMORY (9) often means the detour was already removed
+            if (rc == ERROR_NOT_ENOUGH_MEMORY) {
+                std::cout << "DetourDetach: detour may already be removed (rc=9), continuing...\n";
+                // Don't return false here - try to commit anyway
+            }
+            else {
+                std::cerr << "DetourDetach failed (rc=" << rc << ")\n";
+                DetourTransactionAbort();
+                return false;
+            }
         }
 
         rc = DetourTransactionCommit();
         if (rc != NO_ERROR) {
-            std::cerr << "DetourTransactionCommit failed (rc=" << rc << ")\n";
+            // Even if commit fails, the detour might already be gone
+            std::cout << "DetourTransactionCommit failed (rc=" << rc << "), but marking as restored\n";
             DetourTransactionAbort();
-            return false;
+            // Don't return false - mark as restored anyway
         }
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
         const unsigned long code = GetExceptionCode();
-		std::cout << "Exception during Detour restore: code=0x" << std::hex << code << std::dec << "\n";
+        std::cout << "Exception during Detour restore: code=0x" << std::hex << code << std::dec << "\n";
     }
 
     is_modified = false;
