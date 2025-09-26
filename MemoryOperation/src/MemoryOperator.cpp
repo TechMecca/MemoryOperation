@@ -31,24 +31,32 @@ Patch* MemoryOperator::CreatePatch(const std::string& name, uintptr_t address, c
 }
 
 
-WinDetour* MemoryOperator::CreateDetour(const std::string& name, uintptr_t target_addr, uintptr_t detour_addr)
+WinDetour* MemoryOperator::CreateDetour(const std::string& name, uintptr_t target_addr, uintptr_t detour_addr, bool override = false)
 {
     auto& instance = GetInstance();
     auto& ops = instance.operations;
 
     if (ops.find(name) != ops.end()) {
-        std::cerr << "CreateDetour(raw): name '" << name << "' already exists\n";
-        return nullptr;
+        if (override) {
+            std::cout << "CreateDetour(raw): overriding existing detour '" << name << "'\n";
+            ops.erase(name);
+        }
+        else {
+            std::cerr << "CreateDetour(raw): name '" << name << "' already exists\n";
+            return nullptr;
+        }
     }
+
     if (!target_addr || !detour_addr) {
         std::cerr << "CreateDetour(raw): null target/detour for '" << name << "'\n";
         return nullptr;
     }
 
     try {
-        auto detour = std::make_shared<WinDetour>((PVOID*)target_addr, (PVOID)detour_addr); 
+        auto detour = std::make_shared<WinDetour>((PVOID*)target_addr, (PVOID)detour_addr);
         WinDetour* ptr = detour.get();
         ops.emplace(name, std::move(detour));
+        std::cout << "CreateDetour(raw): successfully created detour '" << name << "'\n";
         return ptr;
     }
     catch (const std::exception& e) {
