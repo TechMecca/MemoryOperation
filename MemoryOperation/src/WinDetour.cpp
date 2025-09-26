@@ -6,24 +6,50 @@
 #include "WinDetour.h"
 #include "MemoryOperation.h" // for is_modified, etc.
 
-WinDetour::WinDetour(uintptr_t targetAddress, uintptr_t detourFunction) :
-    targetAddress((PVOID*)targetAddress), HookAddress((PVOID)detourFunction)
+WinDetour::WinDetour(uintptr_t realTargetAddress, uintptr_t detourFunction)
 {
-   
-    targetStorage = reinterpret_cast<PVOID>(targetAddress);
+    if (!realTargetAddress || !detourFunction) {
+        throw std::invalid_argument("WinDetour: null targetAddress or detourFunction");
+    }
 
-    std::cout << "Detour prepared (raw): target=0x" << std::hex << this->targetAddress
-        << " detour=0x" << this->HookAddress << std::dec << "\n";
+    // Hook function pointer
+    HookAddress = reinterpret_cast<PVOID>(detourFunction);
+
+    // Per-instance variable that Detours will rewrite to the trampoline.
+    // Pre-attach it holds the REAL entry you passed in.
+    targetStorage = reinterpret_cast<PVOID>(realTargetAddress);
+
+    // Since this ctor doesn't receive a user-owned variable, point targetAddress
+    // at our own storage so we can pass &targetStorage to Detours.
+    targetAddress = &targetStorage;
+
+    std::cout << "Detour prepared (raw): target=0x" << std::hex << realTargetAddress
+        << " detour=0x" << reinterpret_cast<uintptr_t>(HookAddress) << std::dec << "\n";
 }
 
-WinDetour::WinDetour(PVOID* targetAddress, PVOID detourFunction) :
-    targetAddress(targetAddress), HookAddress((PVOID)detourFunction)
-{
-    targetStorage = reinterpret_cast<PVOID>(targetAddress);
 
-    std::cout << "Detour prepared (raw): target = 0x" << std::hex << this->targetAddress
-        << "\n detour = 0x" << this->HookAddress << "\ntargetStorage = 0x" << targetStorage << std::endl;
+//
+WinDetour::WinDetour(PVOID* targetAddressRef, PVOID detourFunction)
+{
+    if (!targetAddressRef || !*targetAddressRef || !detourFunction) {
+        throw std::invalid_argument("WinDetour: null targetAddressRef/*targetAddressRef or detourFunction");
+    }
+
+    // Keep the caller's variable — Detours will rewrite *this variable*.
+    targetAddress = targetAddressRef;
+    HookAddress = detourFunction;
+
+    // targetStorage is not used for the attach in this path, but we mirror the
+    // current value (the real entry) for logging/debugging if you need it.
+    targetStorage = *targetAddressRef; // e.g., 0x0819210
+
+    std::cout << "Detour prepared (ref): target=0x" << std::hex
+        << reinterpret_cast<uintptr_t>(*targetAddress)
+        << " detour=0x" << reinterpret_cast<uintptr_t>(HookAddress)
+        << " (targetStorage mirror=0x" << reinterpret_cast<uintptr_t>(targetStorage)
+        << ")" << std::dec << "\n";
 }
+
 
 WinDetour::~WinDetour()
 {
