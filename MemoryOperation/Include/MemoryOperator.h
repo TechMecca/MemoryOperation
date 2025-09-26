@@ -18,5 +18,5 @@ public:
 
 private:
     static MemoryOperator& GetInstance();
-    std::map<std::string, std::unique_ptr<MemoryOperation>> operations;
+    std::map<std::string, std::shared_ptr<MemoryOperation>> operations;
 };
