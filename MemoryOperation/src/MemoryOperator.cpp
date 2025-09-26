@@ -52,7 +52,7 @@ Patch* MemoryOperator::CreatePatch(const std::string& name, uintptr_t address, c
 //    }
 //}
 
-WinDetour* MemoryOperator::CreateDetour(const std::string& name, PVOID* target_addr, PVOID detour_addr)
+WinDetour* MemoryOperator::CreateDetour(const std::string& name, uintptr_t target_addr, uintptr_t detour_addr)
 {
     auto& instance = GetInstance();
     auto& ops = instance.operations;
