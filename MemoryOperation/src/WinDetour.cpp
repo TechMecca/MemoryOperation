@@ -37,6 +37,7 @@ WinDetour::WinDetour(PVOID* targetAddressRef, PVOID detourFunction)
 
         std::cout << std::hex << this->address << "  saved=" << std::dec
             << " Bytes " << hex << " Size 20" << std::endl;
+
     }
 }
 
