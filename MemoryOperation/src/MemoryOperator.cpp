@@ -67,7 +67,7 @@ WinDetour* MemoryOperator::CreateDetour(const std::string& name, uintptr_t targe
     }
 
     try {
-        auto detour = std::make_shared<WinDetour>(target_addr, detour_addr); // <-- make_shared (correct)
+        auto detour = std::make_shared<WinDetour>((PVOID*)target_addr, (PVOID)detour_addr); 
         WinDetour* ptr = detour.get();
         ops.emplace(name, std::move(detour));
         return ptr;

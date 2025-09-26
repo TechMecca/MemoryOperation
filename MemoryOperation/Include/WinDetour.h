@@ -12,7 +12,6 @@
 class WinDetour : public MemoryOperation
 {
 public:
-    WinDetour(uintptr_t targetAddress, uintptr_t funcAddress);
     WinDetour(PVOID* targetAddress, PVOID detourFunction);
 
     ~WinDetour();

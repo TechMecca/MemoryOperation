@@ -6,26 +6,7 @@
 #include "WinDetour.h"
 #include "MemoryOperation.h" // for is_modified, etc.
 
-WinDetour::WinDetour(uintptr_t realTargetAddress, uintptr_t detourFunction)
-{
-    if (!realTargetAddress || !detourFunction) {
-        throw std::invalid_argument("WinDetour: null targetAddress or detourFunction");
-    }
 
-    // Hook function pointer
-    HookAddress = reinterpret_cast<PVOID>(detourFunction);
-
-    // Per-instance variable that Detours will rewrite to the trampoline.
-    // Pre-attach it holds the REAL entry you passed in.
-    targetStorage = reinterpret_cast<PVOID>(realTargetAddress);
-
-    // Since this ctor doesn't receive a user-owned variable, point targetAddress
-    // at our own storage so we can pass &targetStorage to Detours.
-    targetAddress = &targetStorage;
-
-    std::cout << "Detour prepared (raw): target=0x" << std::hex << realTargetAddress
-        << " detour=0x" << reinterpret_cast<uintptr_t>(HookAddress) << std::dec << "\n";
-}
 
 
 //
