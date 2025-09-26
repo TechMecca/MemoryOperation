@@ -5,31 +5,38 @@
 
 #include "WinDetour.h"
 #include "MemoryOperation.h" // for is_modified, etc.
+#include <MemoryOperator.h>
+#include <Memory.h>
 
 
-
-
-//
 WinDetour::WinDetour(PVOID* targetAddressRef, PVOID detourFunction)
 {
     if (!targetAddressRef || !*targetAddressRef || !detourFunction) {
         throw std::invalid_argument("WinDetour: null targetAddressRef/*targetAddressRef or detourFunction");
     }
 
-    // Keep the caller's variable — Detours will rewrite *this variable*.
-    targetAddress = targetAddressRef;
-    HookAddress = detourFunction;
+    // Detours wiring
+    targetAddress = targetAddressRef;         // variable Detours will rewrite
+    HookAddress = detourFunction;           // your hook
+    targetStorage = *targetAddressRef;        // current value (real entry before attach)
 
-    // targetStorage is not used for the attach in this path, but we mirror the
-    // current value (the real entry) for logging/debugging if you need it.
-    targetStorage = *targetAddressRef; // e.g., 0x0819210
+    // Save bytes from the real entry (original function start)
+    this->address = reinterpret_cast<uintptr_t>(targetStorage);
 
-    std::cout << "Detour prepared (ref): target=0x" << std::hex
-        << reinterpret_cast<uintptr_t>(*targetAddress)
-        << " detour=0x" << reinterpret_cast<uintptr_t>(HookAddress)
-        << " (targetStorage mirror=0x" << reinterpret_cast<uintptr_t>(targetStorage)
-        << ")" << std::dec << "\n";
+    auto bytes = Memory::ReadBytes(this->address, 20);
+
+    // If original_bytes is std::vector<uint8_t>:
+    original_bytes = std::move(bytes);
+
+    // If original_bytes is a different byte type (e.g., std::vector<byte>), use:
+    // original_bytes.assign(bytes.begin(), bytes.end());
+
+    if (MemoryOperator::DEBUG) {
+        std::cout << std::hex << this->address << "  saved=" << std::dec
+            << original_bytes.size() << " bytes\n";
+    }
 }
+
 
 
 WinDetour::~WinDetour()

@@ -16,6 +16,8 @@ public:
     static Patch*     FindPatch(const std::string& name);
     static WinDetour* FindDetour(const std::string& name);
 
+    static bool DEBUG;
+
 private:
     static MemoryOperator& GetInstance();
     std::map<std::string, std::shared_ptr<MemoryOperation>> operations;

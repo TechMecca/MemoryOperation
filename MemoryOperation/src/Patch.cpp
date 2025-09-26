@@ -4,7 +4,8 @@
 
 Patch::Patch(uintptr_t target_addr, const std::vector<byte>& bytes)
 {
-    if (target_addr == 0) {
+    if (target_addr == 0) 
+    {
         throw std::invalid_argument("Target address cannot be null");
     }
 
