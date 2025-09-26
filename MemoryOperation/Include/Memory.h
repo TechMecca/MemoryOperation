@@ -1,18 +1,28 @@
 #pragma once
-#include <Windows.h>
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <tlhelp32.h>   // <-- for MODULEENTRY32, CreateToolhelp32Snapshot, Module32First/Next
+#include <algorithm>
+#include <cctype>
+#include <cstring>
 #include <string>
+#include <cstdint>
 #include <vector>
-#include <type_traits>
 
 class Memory
 {
 public:
-    // 1. Read any type with template (dereferences pointer)
+
+    static uintptr_t GetBaseAddress();
+
+    static uintptr_t GetModuleAddress(std::string ModuleName);
+
+
     template<typename T>
     static T Read(uintptr_t address);
 
     // 2. Read raw bytes
-    static std::vector<byte> ReadBytes(uintptr_t address, size_t size);
+    static std::vector<unsigned char> ReadBytes(uintptr_t address, size_t size);
 
     // 3. Read ASCII string (null-terminated)
     static std::string ReadAscii(uintptr_t address, size_t max_length = 256);

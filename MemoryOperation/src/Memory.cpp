@@ -3,8 +3,14 @@
 #include <cstring>
 
 
-// 2. Read raw bytes (using memcpy) - SEH protected
-std::vector<byte> Memory::ReadBytes(uintptr_t address, size_t size)
+uintptr_t Memory::GetBaseAddress()
+{
+    // Using W-variant; nullptr => current process main module
+    HMODULE h = ::GetModuleHandleW(nullptr);
+    return reinterpret_cast<uintptr_t>(h);
+}
+
+std::vector<unsigned char> Memory::ReadBytes(uintptr_t address, size_t size)
 {
     std::vector<uint8_t> result(size);
     memcpy(result.data(), reinterpret_cast<void*>(address), size);
@@ -45,4 +51,15 @@ std::wstring Memory::ReadUnicode(uintptr_t address, size_t max_length)
     }
 
     return std::wstring(wide_str, length);
+}
+
+
+uintptr_t Memory::GetModuleAddress(std::string ModuleName)
+{
+    if (ModuleName.empty()) return 0;
+
+    if (HMODULE h = ::GetModuleHandleA(ModuleName.c_str()))
+        return reinterpret_cast<uintptr_t>(h);
+
+    return NULL;
 }
