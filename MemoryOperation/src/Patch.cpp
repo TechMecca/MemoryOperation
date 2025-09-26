@@ -16,25 +16,26 @@ Patch::Patch(uintptr_t target_addr, const std::vector<byte>& bytes)
 
     address = target_addr;
     new_bytes = bytes;
+    size = bytes.size();
 
     // Change protection to read original bytes
     DWORD old_protection;
-    if (!SetMemoryProtection(address, new_bytes.size(), PAGE_EXECUTE_READWRITE, &old_protection)) {
+    if (!SetMemoryProtection(address, size, PAGE_EXECUTE_READWRITE, &old_protection)) {
         throw std::runtime_error("Failed to change memory protection for backup");
     }
 
     // Backup original bytes
-    original_bytes.resize(new_bytes.size());
-    std::memcpy(original_bytes.data(), reinterpret_cast<const void*>(address), new_bytes.size());
+    original_bytes.resize(size);
+    std::memcpy(original_bytes.data(), reinterpret_cast<const void*>(address), size);
 
     // Restore original protection
     DWORD temp;
-    if (!SetMemoryProtection(address, new_bytes.size(), old_protection, &temp)) {
+    if (!SetMemoryProtection(address, size, old_protection, &temp)) {
         std::cerr << "Warning: Failed to restore original memory protection" << std::endl;
     }
 
     std::cout << "Patch prepared at 0x" << std::hex << address << std::dec
-        << " (size: " << new_bytes.size() << " bytes)" << std::endl;
+        << " (size: " << size << " bytes)" << std::endl;
 }
 
 Patch::~Patch()

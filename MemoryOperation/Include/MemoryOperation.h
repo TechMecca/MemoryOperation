@@ -10,6 +10,7 @@ public:
     uintptr_t address = 0;
     std::vector<uint8_t> original_bytes{};
     std::vector<uint8_t> new_bytes{};
+    SIZE_T size = 0;
     bool is_modified = false;
 
     virtual ~MemoryOperation() = default;
