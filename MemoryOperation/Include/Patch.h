@@ -6,6 +6,7 @@ class Patch : public MemoryOperation
 public:
     Patch(uintptr_t target_addr, const std::vector<byte>& bytes);
     ~Patch();
+    std::vector<uint8_t> new_bytes{};
 
     bool Apply() override;
     bool Restore() override;

@@ -16,7 +16,7 @@ Patch::Patch(uintptr_t target_addr, const std::vector<byte>& bytes)
 
     address = target_addr;
     new_bytes = bytes;
-    size = bytes.size();
+    size = 23;
 
     // Change protection to read original bytes
     DWORD old_protection;
@@ -25,8 +25,8 @@ Patch::Patch(uintptr_t target_addr, const std::vector<byte>& bytes)
     }
 
     // Backup original bytes
-    original_bytes.resize(size);
-    std::memcpy(original_bytes.data(), reinterpret_cast<const void*>(address), size);
+    original_bytes.resize(23);
+    std::memcpy(original_bytes.data(), reinterpret_cast<const void*>(address), 23);
 
     // Restore original protection
     DWORD temp;
@@ -89,7 +89,7 @@ bool Patch::Restore()
         return false;
     }
 
-    bool success = WriteMemory(address, original_bytes.data(), original_bytes.size());
+    bool success = WriteMemory(address, original_bytes.data(), new_bytes.size());
 
     DWORD temp;
     SetMemoryProtection(address, original_bytes.size(), old_protection, &temp);
