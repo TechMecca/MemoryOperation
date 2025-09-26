@@ -3,19 +3,6 @@
 #include <cstring>
 
 
-template<typename T>
-T Memory::Read(uintptr_t address)
-{
-    static_assert(std::is_trivially_copyable_v<T>, "Type must be trivially copyable");
-
-    __try {
-        return *reinterpret_cast<const T*>(address);
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER) {
-        return T{};
-    }
-}
-
 // 2. Read raw bytes (using memcpy) - SEH protected
 std::vector<byte> Memory::ReadBytes(uintptr_t address, size_t size)
 {
