@@ -1,12 +1,5 @@
-#include <windows.h>
-#include <cstdint>
-#include <stdexcept>
-#include <iostream>
-
 #include "WinDetour.h"
-#include "MemoryOperation.h" // for is_modified, etc.
-#include <MemoryOperator.h>
-#include <Memory.h>
+
 
 
 WinDetour::WinDetour(PVOID* targetAddressRef, PVOID detourFunction)
@@ -32,13 +25,13 @@ WinDetour::WinDetour(PVOID* targetAddressRef, PVOID detourFunction)
     // If original_bytes is a different byte type (e.g., std::vector<byte>), use:
     // original_bytes.assign(bytes.begin(), bytes.end());
 
-    if (MemoryOperator::DEBUG) {
+   /* if (MemoryOperator::DEBUG) {
         std::string hex = Memory::BytesToString(original_bytes, size);
 
         std::cout << std::hex << this->address << "  saved=" << std::dec
             << " Bytes " << hex << " Size 20" << std::endl;
 
-    }
+    }*/
 }
 
 

@@ -1,7 +1,4 @@
 #include "Patch.h"
-#include <stdexcept>
-#include <cstring>
-#include <iostream>
 
 Patch::Patch(uintptr_t target_addr, const std::vector<byte>& bytes)
 {
@@ -16,7 +13,7 @@ Patch::Patch(uintptr_t target_addr, const std::vector<byte>& bytes)
 
     address = target_addr;
     new_bytes = bytes;
-    size = 23;
+    size = new_bytes.size();
 
     // Change protection to read original bytes
     DWORD old_protection;
@@ -25,8 +22,8 @@ Patch::Patch(uintptr_t target_addr, const std::vector<byte>& bytes)
     }
 
     // Backup original bytes
-    original_bytes.resize(23);
-    std::memcpy(original_bytes.data(), reinterpret_cast<const void*>(address), 23);
+    original_bytes.resize(size);
+    std::memcpy(original_bytes.data(), reinterpret_cast<const void*>(address), size);
 
     // Restore original protection
     DWORD temp;
@@ -54,7 +51,7 @@ bool Patch::Apply()
     }
 
     DWORD old_protection;
-    if (!SetMemoryProtection(address, new_bytes.size(), PAGE_EXECUTE_READWRITE, &old_protection)) {
+    if (!SetMemoryProtection(address, size, PAGE_EXECUTE_READWRITE, &old_protection)) {
         std::cout << "\x1b[91m[Patch] Apply failed: Memory protection change failed\x1b[0m" << std::endl;
         return false;
     }
@@ -89,7 +86,7 @@ bool Patch::Restore()
         return false;
     }
 
-    bool success = WriteMemory(address, original_bytes.data(), new_bytes.size());
+    bool success = WriteMemory(address, original_bytes.data(), original_bytes.size());
 
     DWORD temp;
     SetMemoryProtection(address, original_bytes.size(), old_protection, &temp);

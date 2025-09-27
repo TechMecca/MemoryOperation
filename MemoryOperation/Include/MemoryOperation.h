@@ -1,6 +1,11 @@
 ﻿#pragma once
 #include <Windows.h>
+#include <detours.h>
+#include <cstdint>
+#include <stdexcept>
 #include <vector>
+#include <iostream> 
+#include <Memory.h>
 
 typedef unsigned char byte;
 

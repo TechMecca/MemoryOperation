@@ -1,11 +1,4 @@
 #pragma once
-#include <windows.h>
-#include <detours.h>
-#include <cstdint>
-#include <stdexcept>
-#include <vector>
-#include <iostream> // for minimal logging (avoid in hooks)
-
 #include "MemoryOperation.h"
 
 // Minimal, safe wrapper around Microsoft Detours.

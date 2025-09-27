@@ -1,5 +1,4 @@
 #include "MemoryOperator.h"
-#include <iostream>
 
 
 bool MemoryOperator::DEBUG = false;
@@ -86,3 +85,22 @@ WinDetour* MemoryOperator::FindDetour(const std::string& name)
     }
     return nullptr;
 }
+
+
+// i gotten the idea (code) From ByteWeaver / Oxkate
+bool MemoryOperator::IsLocationModified(uintptr_t address, size_t length,
+    std::map<std::string, std::shared_ptr<MemoryOperation>>& out)
+{
+    const auto end = address + length;
+    auto&& ops = GetInstance().operations;
+    std::ranges::copy_if(ops, std::inserter(out, out.end()),
+        [=](const auto& kv) {
+            const auto& op = kv.second;
+            return op && op->is_modified &&
+                address < op->address + op->size && end > op->address; // overlap
+        });
+    return !out.empty();
+}
+
+
+
