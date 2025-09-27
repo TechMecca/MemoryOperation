@@ -10,6 +10,7 @@ public:
 	Scanner(uintptr_t Address, const std::string& pattern);
 	~Scanner();
 	bool Scan(uintptr_t* results);
+	bool Scan(uintptr_t* results, bool scanForFunction);
 
 private:
 	std::vector<uint8_t> pattern;

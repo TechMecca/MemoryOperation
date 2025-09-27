@@ -102,4 +102,83 @@ bool Scanner::Scan(uintptr_t* results)
     return false; 
 }
 
+bool Scanner::Scan(uintptr_t* results, bool scanForFunction)
+{
+    if (this->pattern.empty() || results == nullptr) return false;
+
+    SYSTEM_INFO sysInfo{};
+    GetSystemInfo(&sysInfo);
+    const uintptr_t startAddress = reinterpret_cast<uintptr_t>(sysInfo.lpMinimumApplicationAddress);
+    const uintptr_t endAddress = reinterpret_cast<uintptr_t>(sysInfo.lpMaximumApplicationAddress);
+
+    MEMORY_BASIC_INFORMATION mbi{};
+    uintptr_t currentAddress = startAddress;
+
+    while (currentAddress < endAddress &&
+        VirtualQuery(reinterpret_cast<LPCVOID>(currentAddress), &mbi, sizeof(mbi)))
+    {
+        // Determine memory protection based on what we're scanning for
+        bool shouldScan = false;
+
+        if (mbi.State == MEM_COMMIT && !(mbi.Protect & PAGE_GUARD))
+        {
+            if (scanForFunction)
+            {
+                // For functions: look in executable memory
+                shouldScan = (mbi.Protect & (PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE));
+            }
+            else
+            {
+                // For variables: look in readable/writable memory (non-executable)
+                shouldScan = (mbi.Protect & (PAGE_READONLY | PAGE_READWRITE | PAGE_READWRITE | PAGE_WRITECOPY)) &&
+                    !(mbi.Protect & (PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE));
+            }
+        }
+
+        if (shouldScan)
+        {
+            uintptr_t regionStart = reinterpret_cast<uintptr_t>(mbi.BaseAddress);
+            uintptr_t regionEnd = regionStart + mbi.RegionSize;
+            size_t regionSize = mbi.RegionSize;
+
+            // Safety check to avoid overflow
+            if (regionSize > pattern.size() && regionEnd > regionStart)
+            {
+                // Scan this memory region
+                for (uintptr_t addr = regionStart; addr < regionEnd - pattern.size(); ++addr)
+                {
+                    bool found = true;
+                    const uint8_t* data = reinterpret_cast<const uint8_t*>(addr);
+
+                    for (size_t i = 0; i < pattern.size(); ++i)
+                    {
+                        // Skip wildcard bytes (assuming mask is available)
+                        if (!mask[i]) continue;
+
+                        // Compare byte
+                        if (data[i] != pattern[i]) {
+                            found = false;
+                            break;
+                        }
+                    }
+
+                    if (found)
+                    {
+                        *results = addr;
+                        return true;
+                    }
+                }
+            }
+        }
+
+        currentAddress = reinterpret_cast<uintptr_t>(mbi.BaseAddress) + mbi.RegionSize;
+
+        // Check for overflow/wrap-around
+        if (currentAddress < reinterpret_cast<uintptr_t>(mbi.BaseAddress)) {
+            break;
+        }
+    }
+
+    return false;
+}
 
