@@ -35,7 +35,8 @@ WinDetour* MemoryOperator::CreateDetour(const std::string& name, uintptr_t targe
     auto& instance = GetInstance();
     auto& ops = instance.operations;
 
-    if (ops.find(name) != ops.end()) {
+    if (ops.find(name) != ops.end())
+    {
         if (override)
         {
             std::cout << "CreateDetour(raw): overriding existing detour '" << name << "'\n";
@@ -101,6 +102,41 @@ bool MemoryOperator::IsLocationModified(uintptr_t address, size_t length,
         });
     return !out.empty();
 }
+
+
+BOOL MemoryOperator::DisposeAll(bool saveActive) 
+{
+    auto& inst = GetInstance();
+    auto& ops = inst.operations;
+    auto* saved = saveActive ? &inst.Savedoperations : nullptr;
+
+    if (saved) { saved->clear(); }
+
+    for (auto& [name, op] : ops)
+        if (op && op->is_modified && !Memory::IsBadRange(op->address, op->size, true))
+        {
+            if (saved) saved->emplace(name, op);
+            op->Restore();
+        }
+
+    return TRUE;
+}
+
+BOOL MemoryOperator::ApplyAll(bool useSavedActive) 
+{
+    auto& inst = GetInstance();
+    auto& src = useSavedActive ? inst.Savedoperations : inst.operations;
+
+    for (auto& [name, op] : src)
+        if (op && (useSavedActive || op->is_modified) &&
+            !Memory::IsBadRange(op->address, op->size, true))
+        {
+            op->Apply();
+        }
+
+    return TRUE;
+}
+
 
 
 

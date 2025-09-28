@@ -80,3 +80,41 @@ std::string Memory::BytesToString(const std::vector<uint8_t>& bytes, std::size_t
     }
     return out;
 }
+
+
+
+BOOL Memory::IsBadRange(uintptr_t addr, size_t len, bool write) 
+{
+    if (!len) return TRUE;
+
+    // Overflow check without max(): unsigned wrap means end < addr
+    const auto end = addr + static_cast<uintptr_t>(len);
+    if (end < addr) return TRUE;
+
+    SIZE_T remaining = len;
+    auto* p = reinterpret_cast<const BYTE*>(addr);
+
+    while (remaining) {
+        MEMORY_BASIC_INFORMATION mbi{};
+        if (!VirtualQuery(p, &mbi, sizeof(mbi))) return TRUE;
+        if (mbi.State != MEM_COMMIT) return TRUE;
+
+        // effective protection (ignore modifiers)
+        const DWORD prot = mbi.Protect & ~(PAGE_GUARD | PAGE_NOCACHE | PAGE_WRITECOMBINE);
+        const bool canWrite = prot == PAGE_READWRITE || prot == PAGE_WRITECOPY ||
+            prot == PAGE_EXECUTE_READWRITE || prot == PAGE_EXECUTE_WRITECOPY;
+        const bool canRead = prot == PAGE_READONLY || prot == PAGE_READWRITE || prot == PAGE_WRITECOPY ||
+            prot == PAGE_EXECUTE_READ || prot == PAGE_EXECUTE_READWRITE || prot == PAGE_EXECUTE_WRITECOPY;
+
+        if (write ? !canWrite : !canRead) return TRUE;
+
+        // advance across this region (may span multiple pages)
+        const auto regionEnd = static_cast<const BYTE*>(mbi.BaseAddress) + mbi.RegionSize;
+        SIZE_T chunk = static_cast<SIZE_T>(regionEnd - p);
+        if (chunk > remaining) chunk = remaining;
+        p += chunk;
+        remaining -= chunk;
+    }
+    return FALSE; // good range
+}
+

@@ -23,6 +23,8 @@ public:
 
     static Patch*     FindPatch(const std::string& name);
     static WinDetour* FindDetour(const std::string& name);
+	static BOOL       DisposeAll(bool SaveActive);
+    static BOOL       ApplyAll(bool useSavedActive);
 
 	static bool       IsLocationModified(const uintptr_t address, const size_t length, std::map<std::string, std::shared_ptr<MemoryOperation>>& ModifiedMemory);
 
@@ -30,4 +32,6 @@ public:
 
 private:
     std::map<std::string, std::shared_ptr<MemoryOperation>> operations;
+    std::map<std::string, std::shared_ptr<MemoryOperation>> Savedoperations;
+
 };

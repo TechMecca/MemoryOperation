@@ -30,6 +30,8 @@ public:
     // 4. Read Unicode string (null-terminated)
     static std::wstring ReadUnicode(uintptr_t address, size_t max_length = 256);
     static std::string BytesToString(const std::vector<uint8_t>& bytes, std::size_t len);
+
+    static BOOL IsBadRange(uintptr_t addr, size_t len, bool write);
   
 };
 

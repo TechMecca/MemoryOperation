@@ -19,19 +19,10 @@ WinDetour::WinDetour(PVOID* targetAddressRef, PVOID detourFunction)
     size = 20;
     auto bytes = Memory::ReadBytes(this->address, size);
 
-    // If original_bytes is std::vector<uint8_t>:
+
     original_bytes = std::move(bytes);
 
-    // If original_bytes is a different byte type (e.g., std::vector<byte>), use:
-    // original_bytes.assign(bytes.begin(), bytes.end());
-
-   /* if (MemoryOperator::DEBUG) {
-        std::string hex = Memory::BytesToString(original_bytes, size);
-
-        std::cout << std::hex << this->address << "  saved=" << std::dec
-            << " Bytes " << hex << " Size 20" << std::endl;
-
-    }*/
+  
 }
 
 
