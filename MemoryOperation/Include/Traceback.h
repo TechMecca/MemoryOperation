@@ -18,7 +18,7 @@ public:
                 "[FrameInfo] %-2u) - " "0x%08x",
                 StackIndex, CallAddress);
 
-			std::cout << msg << std::endl
+            std::cout << msg << std::endl;
         }
 
     };
