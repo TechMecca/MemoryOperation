@@ -1,4 +1,5 @@
 #include "MemoryOperator.h"
+#include <unordered_set>
 
 
 bool MemoryOperator::DEBUG = false;
@@ -104,23 +105,32 @@ bool MemoryOperator::IsLocationModified(uintptr_t address, size_t length,
 }
 
 
-BOOL MemoryOperator::DisposeAll(bool saveActive) 
+
+BOOL MemoryOperator::DisposeAll(bool saveActive, const std::vector<std::string>& ignoreList)
 {
     auto& inst = GetInstance();
     auto& ops = inst.operations;
     auto* saved = saveActive ? &inst.Savedoperations : nullptr;
 
-    if (saved) { saved->clear(); }
+    if (saved) saved->clear();
 
-    for (auto& [name, op] : ops)
-        if (op && op->is_modified && !Memory::IsBadRange(op->address, op->size, true))
-        {
-            if (saved) saved->emplace(name, op);
-            op->Restore();
-        }
+    // Fast ignore lookups
+    std::unordered_set<std::string_view> ignore;
+    ignore.reserve(ignoreList.size());
+    for (const auto& s : ignoreList) ignore.emplace(s);
+
+    for (auto& [name, op] : ops) {
+        if (!op || !op->is_modified) continue;
+        if (ignore.find(name) != ignore.end()) continue;
+        if (Memory::IsBadRange(op->address, op->size, /*write*/true)) continue;
+
+        if (saved) saved->emplace(name, op);
+        op->Restore();
+    }
 
     return TRUE;
 }
+
 
 BOOL MemoryOperator::ApplyAll(bool useSavedActive) 
 {
