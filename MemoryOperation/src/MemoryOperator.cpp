@@ -138,7 +138,7 @@ BOOL MemoryOperator::ApplyAll(bool useSavedActive)
     auto& src = useSavedActive ? inst.Savedoperations : inst.operations;
 
     for (auto& [name, op] : src)
-        if (op && (useSavedActive || op->is_modified) &&
+        if (op && (useSavedActive || !op->is_modified) &&
             !Memory::IsBadRange(op->address, op->size, true))
         {
             op->Apply();
