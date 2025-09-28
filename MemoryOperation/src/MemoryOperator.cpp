@@ -31,42 +31,46 @@ Patch* MemoryOperator::CreatePatch(const std::string& name, uintptr_t address, c
 }
 
 
-WinDetour* MemoryOperator::CreateDetour(const std::string& name, uintptr_t target_addr, uintptr_t detour_addr, bool override = false)
+
+
+WinDetour* MemoryOperator::CreateDetour(const std::string& name,
+    uintptr_t target_addr,
+    uintptr_t detour_addr,
+    bool overrideExisting) 
 {
-    auto& instance = GetInstance();
-    auto& ops = instance.operations;
+    auto& inst = GetInstance();
+    auto& ops = inst.operations;
 
-    if (ops.find(name) != ops.end())
-    {
-        if (override)
-        {
-            std::cout << "CreateDetour(raw): overriding existing detour '" << name << "'\n";
-
-            ops.erase(name);
-        }
-        else {
-            std::cerr << "CreateDetour(raw): name '" << name << "' already exists\n";
+    // name clash handling
+    if (ops.contains(name)) {
+        if (!overrideExisting) {
             return nullptr;
         }
+        ops.erase(name);
     }
 
-    if (!target_addr || !detour_addr) {
-        std::cerr << "CreateDetour(raw): null target/detour for '" << name << "'\n";
-        return nullptr;
-    }
+    try 
+    {
+        auto detour = std::make_shared<WinDetour>(
+            reinterpret_cast<PVOID*>(target_addr),
+            reinterpret_cast<PVOID>(detour_addr)
+        );
 
-    try {
-        auto detour = std::make_shared<WinDetour>((PVOID*)target_addr, (PVOID)detour_addr);
-        WinDetour* ptr = detour.get();
+        WinDetour* raw = detour.get();
         ops.emplace(name, std::move(detour));
-        std::cout << "CreateDetour(raw): successfully created detour '" << name << "'\n";
-        return ptr;
+        std::cout << "CreateDetour: created '" << name << "'\n";
+        return raw;
     }
     catch (const std::exception& e) {
-        std::cerr << "CreateDetour(raw): exception for '" << name << "': " << e.what() << "\n";
+        std::cerr << "CreateDetour: exception for '" << name << "': " << e.what() << "\n";
+        return nullptr;
+    }
+    catch (...) {
+        std::cerr << "CreateDetour: unknown exception for '" << name << "'\n";
         return nullptr;
     }
 }
+
 
 Patch* MemoryOperator::FindPatch(const std::string& name)
 {

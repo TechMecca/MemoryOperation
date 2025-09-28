@@ -85,64 +85,95 @@ bool WinDetour::Apply()
     return true;
 }
 
+
 bool WinDetour::Restore()
 {
     if (!is_modified) {
-        std::cout << "Detour not applied; nothing to restore\n";
         return true;
     }
+
+    // Always mark as restored first to prevent multiple attempts
+    is_modified = false;
 
     if (!IsValid()) {
-        std::cout << "Restore: target memory is invalid - skipping detach\n";
-        is_modified = false;
+        std::cout << "Restore: target memory invalid, skipping detach\n";
         return true;
-    }
-
-    LONG rc = DetourTransactionBegin();
-    if (rc != NO_ERROR) {
-        std::cerr << "DetourTransactionBegin failed (rc=" << rc << ")\n";
-        return false;
     }
 
     __try {
-        rc = DetourUpdateThread(GetCurrentThread());
-        if (rc != NO_ERROR) {
-            std::cerr << "DetourUpdateThread failed (rc=" << rc << ")\n";
-            DetourTransactionAbort();
-            return false;
-        }
-
-        rc = DetourDetach((PVOID*)targetAddress, (PVOID)HookAddress);
-        if (rc != NO_ERROR) {
-            // ERROR_NOT_ENOUGH_MEMORY (9) often means the detour was already removed
-            if (rc == ERROR_NOT_ENOUGH_MEMORY) {
-                std::cout << "DetourDetach: detour may already be removed (rc=9), continuing...\n";
-                // Don't return false here - try to commit anyway
-            }
-            else {
-                std::cerr << "DetourDetach failed (rc=" << rc << ")\n";
-                DetourTransactionAbort();
-                return false;
-            }
-        }
-
-        rc = DetourTransactionCommit();
-        if (rc != NO_ERROR) {
-            // Even if commit fails, the detour might already be gone
-            std::cout << "DetourTransactionCommit failed (rc=" << rc << "), but marking as restored\n";
-            DetourTransactionAbort();
-            // Don't return false - mark as restored anyway
+        LONG rc = DetourTransactionBegin();
+        if (rc == NO_ERROR) {
+            DetourUpdateThread(GetCurrentThread());
+            DetourDetach((PVOID*)targetAddress, (PVOID)HookAddress);
+            DetourTransactionCommit();
         }
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
-        const unsigned long code = GetExceptionCode();
-        std::cout << "Exception during Detour restore: code=0x" << std::hex << code << std::dec << "\n";
+        // Ignore all exceptions during restoration
     }
 
-    is_modified = false;
-    std::cout << "Detour restored: target=0x" << std::hex << this->targetAddress << std::dec << "\n";
+    std::cout << "Detour restoration attempted\n";
     return true;
 }
+
+//bool WinDetour::Restore()
+//{
+//    if (!is_modified) {
+//        std::cout << "Detour not applied; nothing to restore\n";
+//        return true;
+//    }
+//
+//    if (!IsValid()) {
+//        std::cout << "Restore: target memory is invalid - skipping detach\n";
+//        is_modified = false;
+//        return true;
+//    }
+//
+//    LONG rc = DetourTransactionBegin();
+//    if (rc != NO_ERROR) {
+//        std::cerr << "DetourTransactionBegin failed (rc=" << rc << ")\n";
+//        return false;
+//    }
+//
+//    __try {
+//        rc = DetourUpdateThread(GetCurrentThread());
+//        if (rc != NO_ERROR) {
+//            std::cerr << "DetourUpdateThread failed (rc=" << rc << ")\n";
+//            DetourTransactionAbort();
+//            return false;
+//        }
+//
+//        rc = DetourDetach((PVOID*)targetAddress, (PVOID)HookAddress);
+//        if (rc != NO_ERROR) {
+//            // ERROR_NOT_ENOUGH_MEMORY (9) often means the detour was already removed
+//            if (rc == ERROR_NOT_ENOUGH_MEMORY) {
+//                std::cout << "DetourDetach: detour may already be removed (rc=9), continuing...\n";
+//                // Don't return false here - try to commit anyway
+//            }
+//            else {
+//                std::cerr << "DetourDetach failed (rc=" << rc << ")\n";
+//                DetourTransactionAbort();
+//                return false;
+//            }
+//        }
+//
+//        rc = DetourTransactionCommit();
+//        if (rc != NO_ERROR) {
+//            // Even if commit fails, the detour might already be gone
+//            std::cout << "DetourTransactionCommit failed (rc=" << rc << "), but marking as restored\n";
+//            DetourTransactionAbort();
+//            // Don't return false - mark as restored anyway
+//        }
+//    }
+//    __except (EXCEPTION_EXECUTE_HANDLER) {
+//        const unsigned long code = GetExceptionCode();
+//        std::cout << "Exception during Detour restore: code=0x" << std::hex << code << std::dec << "\n";
+//    }
+//
+//    is_modified = false;
+//    std::cout << "Detour restored: target=0x" << std::hex << this->targetAddress << std::dec << "\n";
+//    return true;
+//}
 
 
 bool WinDetour::IsValid()
