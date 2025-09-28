@@ -27,6 +27,7 @@ public:
     static BOOL       ApplyAll(bool useSavedActive);
 
 	static bool       IsLocationModified(const uintptr_t address, const size_t length, std::map<std::string, std::shared_ptr<MemoryOperation>>& ModifiedMemory);
+    static bool       EraseAll();
 
     static bool DEBUG;
 

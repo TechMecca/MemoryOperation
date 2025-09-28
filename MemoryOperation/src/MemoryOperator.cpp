@@ -10,25 +10,33 @@ MemoryOperator& MemoryOperator::GetInstance()
     return instance;
 }
 
-Patch* MemoryOperator::CreatePatch(const std::string& name, uintptr_t address, const std::vector<byte>& bytes)
+// header:
+// Patch* CreatePatch(const std::string& name, uintptr_t address, const std::vector<byte>& bytes);
+
+Patch* MemoryOperator::CreatePatch(const std::string& name,
+    uintptr_t address,
+    const std::vector<byte>& bytes)
 {
-    auto& instance = GetInstance();
+    auto& inst = GetInstance();
+    auto& ops = inst.operations;
 
-    if (instance.operations.find(name) != instance.operations.end()) {
-        return nullptr; // Name already exists
-    }
+    if (ops.find(name) != ops.end()) return nullptr;          // name exists
+    if (!address || bytes.empty())     return nullptr;         // basic sanity
 
-    try 
-    {
-        auto patch = std::make_unique<Patch>(address, bytes);
-        Patch* ptr = patch.get();
-        instance.operations[name] = std::move(patch);
-        return ptr;
+    // Optional: reject obviously bad memory range (write needed to patch)
+    if (Memory::IsBadRange(address, bytes.size(), /*write*/true)) return nullptr;
+
+    try {
+        auto patch = std::make_shared<Patch>(address, bytes);  // shared_ptr
+        Patch* raw = patch.get();                              // do NOT delete
+        ops.emplace(name, std::static_pointer_cast<MemoryOperation>(std::move(patch)));
+        return raw;
     }
-    catch (const std::exception&) {
+    catch (...) {
         return nullptr;
     }
 }
+
 
 
 
@@ -152,5 +160,27 @@ BOOL MemoryOperator::ApplyAll(bool useSavedActive)
 }
 
 
+bool MemoryOperator::EraseAll()
+{
+    auto& inst = GetInstance();
+
+    for (auto& [name, op] : inst.operations) {
+        if (!op) continue;
+
+        // If this op modified memory, try to restore the original bytes first.
+        if (op->is_modified)
+        {
+            if (!Memory::IsBadRange(op->address, op->size, /*write*/true)) {
+                op->Restore();                // put memory back
+				
+            }
+            op->is_modified = false;          // belt-and-suspenders
+        }
+    }
+
+    inst.operations.clear();
+    inst.Savedoperations.clear();
 
 
+    return true;
+}
