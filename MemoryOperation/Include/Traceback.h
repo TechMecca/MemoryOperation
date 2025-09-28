@@ -18,6 +18,7 @@ public:
                 "[FrameInfo] %-2u) - " "0x%08x",
                 StackIndex, CallAddress);
 
+			std::cout << msg << std::endl
         }
 
     };
@@ -27,9 +28,11 @@ public:
         std::array<void*, 62> Stack{};
         std::vector<FrameInfo> Frames{};
         void Dump() const {
+            std::cout << "----------------------------------------" << std::endl;
             for (FrameInfo frame : Frames) {
                 frame.Dump();
             }
+            std::cout << "----------------------------------------" << std::endl;
         }
     };
 
