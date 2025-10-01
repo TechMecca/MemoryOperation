@@ -4,7 +4,8 @@
 
 bool MemoryOperator::DEBUG = false;
 
-
+std::map<std::string, std::shared_ptr<MemoryOperation>> MemoryOperator::operations;
+std::map<std::string, std::shared_ptr<MemoryOperation>> MemoryOperator::Savedoperations;
 
 // header:
 // Patch* CreatePatch(const std::string& name, uintptr_t address, const std::vector<byte>& bytes);
