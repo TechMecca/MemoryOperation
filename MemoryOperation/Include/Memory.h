@@ -39,6 +39,7 @@ template<typename T>
 static T Memory::Read(std::uintptr_t address) {
 
     if(IsBadReadPtr(reinterpret_cast<void*>(address), sizeof(T)) || address == NULL)
+		return T{};
     __try 
     {
         return *reinterpret_cast<T*>(address);
