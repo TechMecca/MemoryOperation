@@ -4,11 +4,7 @@
 
 bool MemoryOperator::DEBUG = false;
 
-MemoryOperator& MemoryOperator::GetInstance()
-{
-    static MemoryOperator instance;
-    return instance;
-}
+
 
 // header:
 // Patch* CreatePatch(const std::string& name, uintptr_t address, const std::vector<byte>& bytes);
@@ -17,14 +13,11 @@ Patch* MemoryOperator::CreatePatch(const std::string& name,
     uintptr_t address,
     const std::vector<byte>& bytes)
 {
-    auto& inst = GetInstance();
-    auto& ops = inst.operations;
+    auto& ops = operations;
 
     if (ops.find(name) != ops.end()) return nullptr;          // name exists
     if (!address || bytes.empty())     return nullptr;         // basic sanity
 
-    // Optional: reject obviously bad memory range (write needed to patch)
-    if (Memory::IsBadRange(address, bytes.size(), /*write*/true)) return nullptr;
 
     try {
         auto patch = std::make_shared<Patch>(address, bytes);  // shared_ptr
@@ -46,8 +39,7 @@ WinDetour* MemoryOperator::CreateDetour(const std::string& name,
     uintptr_t detour_addr,
     bool overrideExisting) 
 {
-    auto& inst = GetInstance();
-    auto& ops = inst.operations;
+    auto& ops = operations;
 
     // name clash handling
     if (ops.contains(name)) {
@@ -82,9 +74,8 @@ WinDetour* MemoryOperator::CreateDetour(const std::string& name,
 
 Patch* MemoryOperator::FindPatch(const std::string& name)
 {
-    auto& instance = GetInstance();
-    auto it = instance.operations.find(name);
-    if (it != instance.operations.end()) {
+    auto it = operations.find(name);
+    if (it != operations.end()) {
         return dynamic_cast<Patch*>(it->second.get());
     }
     return nullptr;
@@ -92,9 +83,8 @@ Patch* MemoryOperator::FindPatch(const std::string& name)
 
 WinDetour* MemoryOperator::FindDetour(const std::string& name)
 {
-    auto& instance = GetInstance();
-    auto it = instance.operations.find(name);
-    if (it != instance.operations.end()) {
+    auto it = operations.find(name);
+    if (it != operations.end()) {
         return dynamic_cast<WinDetour*>(it->second.get());
     }
     return nullptr;
@@ -106,8 +96,7 @@ bool MemoryOperator::IsLocationModified(uintptr_t address, size_t length,
     std::map<std::string, std::shared_ptr<MemoryOperation>>& out)
 {
     const auto end = address + length;
-    auto&& ops = GetInstance().operations;
-    std::ranges::copy_if(ops, std::inserter(out, out.end()),
+    std::ranges::copy_if(operations, std::inserter(out, out.end()),
         [=](const auto& kv) {
             const auto& op = kv.second;
             return op && op->is_modified &&
@@ -120,9 +109,7 @@ bool MemoryOperator::IsLocationModified(uintptr_t address, size_t length,
 
 BOOL MemoryOperator::DisposeAll(bool saveActive, const std::vector<std::string>& ignoreList)
 {
-    auto& inst = GetInstance();
-    auto& ops = inst.operations;
-    auto* saved = saveActive ? &inst.Savedoperations : nullptr;
+    auto* saved = saveActive ? &Savedoperations : nullptr;
 
     if (saved) saved->clear();
 
@@ -131,7 +118,7 @@ BOOL MemoryOperator::DisposeAll(bool saveActive, const std::vector<std::string>&
     ignore.reserve(ignoreList.size());
     for (const auto& s : ignoreList) ignore.emplace(s);
 
-    for (auto& [name, op] : ops) {
+    for (auto& [name, op] : operations) {
         if (!op || !op->is_modified) continue;
         if (ignore.find(name) != ignore.end()) continue;
         if (Memory::IsBadRange(op->address, op->size, /*write*/true)) continue;
@@ -146,8 +133,7 @@ BOOL MemoryOperator::DisposeAll(bool saveActive, const std::vector<std::string>&
 
 BOOL MemoryOperator::ApplyAll(bool useSavedActive) 
 {
-    auto& inst = GetInstance();
-    auto& src = useSavedActive ? inst.Savedoperations : inst.operations;
+    auto& src = useSavedActive ? Savedoperations : operations;
 
     for (auto& [name, op] : src)
         if (op && (useSavedActive || !op->is_modified) &&
@@ -162,9 +148,9 @@ BOOL MemoryOperator::ApplyAll(bool useSavedActive)
 
 bool MemoryOperator::EraseAll()
 {
-    auto& inst = GetInstance();
 
-    for (auto& [name, op] : inst.operations) {
+
+    for (auto& [name, op] : operations) {
         if (!op) continue;
 
         // If this op modified memory, try to restore the original bytes first.
@@ -177,10 +163,8 @@ bool MemoryOperator::EraseAll()
             op->is_modified = false;          // belt-and-suspenders
         }
     }
-
-    inst.operations.clear();
-    inst.Savedoperations.clear();
-
+    operations.clear();
+    Savedoperations.clear();
 
     return true;
 }

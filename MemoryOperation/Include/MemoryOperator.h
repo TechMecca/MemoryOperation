@@ -15,8 +15,7 @@ class MemoryOperator
 {
 public:
 
-    static MemoryOperator& GetInstance();
-	static std::map<std::string, std::shared_ptr<MemoryOperation>>& GetOperations() { return GetInstance().operations; }
+	static std::map<std::string, std::shared_ptr<MemoryOperation>>& GetOperations() { return operations; }
 
     static Patch*     CreatePatch(const std::string& name, uintptr_t address, const std::vector<byte>& bytes);
     static WinDetour* CreateDetour(const std::string& name, uintptr_t target_addr, uintptr_t detour_addr, bool Override);
@@ -32,7 +31,7 @@ public:
     static bool DEBUG;
 
 private:
-    std::map<std::string, std::shared_ptr<MemoryOperation>> operations;
-    std::map<std::string, std::shared_ptr<MemoryOperation>> Savedoperations;
+    static std::map<std::string, std::shared_ptr<MemoryOperation>> operations;
+    static std::map<std::string, std::shared_ptr<MemoryOperation>> Savedoperations;
 
 };
