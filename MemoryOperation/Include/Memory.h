@@ -37,9 +37,11 @@ public:
 
 template<typename T>
 static T Memory::Read(std::uintptr_t address) {
-    static_assert(std::is_trivially_copyable_v<T>, "Type must be trivially copyable");
-    __try {
-        return *reinterpret_cast<const T*>(address);
+
+    if(IsBadReadPtr(reinterpret_cast<void*>(address), sizeof(T)) || address == NULL)
+    __try 
+    {
+        return *reinterpret_cast<T*>(address);
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
         return T{};
