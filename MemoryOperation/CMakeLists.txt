@@ -8,7 +8,7 @@ target_sources(MemoryOperation PUBLIC
        "src/Memory.cpp"
        "src/MemoryOperator.cpp"
        "src/WinConsole.cpp"
-)
+ "Include/CrashSuppressor.h" "src/CrashSuppressor.cpp")
 
 target_include_directories(MemoryOperation PUBLIC
     "Include"
