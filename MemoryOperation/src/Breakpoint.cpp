@@ -46,7 +46,7 @@ void Breakpoint::UpdateDebugRegisters() {
 
     // Re-set all active breakpoints
     for (int i = 0; i < 4; i++) {
-        if (s_breakpoints[i].enabled) {
+        if (s_breakpoints[i].enabled && !s_breakpoints[i].singleStepping) {
             switch (i) {
             case 0: ctx.Dr0 = s_breakpoints[i].address; break;
             case 1: ctx.Dr1 = s_breakpoints[i].address; break;
@@ -60,16 +60,54 @@ void Breakpoint::UpdateDebugRegisters() {
     SetThreadContext(GetCurrentThread(), &ctx);
 }
 
+void Breakpoint::DisableBreakpoint(int drIndex) {
+    if (drIndex < 0 || drIndex > 3) return;
+
+    s_breakpoints[drIndex].singleStepping = true;
+    UpdateDebugRegisters();
+}
+
+void Breakpoint::EnableBreakpoint(int drIndex) {
+    if (drIndex < 0 || drIndex > 3) return;
+
+    s_breakpoints[drIndex].singleStepping = false;
+    UpdateDebugRegisters();
+}
+
+void Breakpoint::SingleStepInstruction(HANDLE hThread) {
+    CONTEXT ctx = { 0 };
+    ctx.ContextFlags = CONTEXT_CONTROL;
+
+    if (GetThreadContext(hThread, &ctx)) {
+        ctx.EFlags |= 0x100; // Set trap flag for single step
+        SetThreadContext(hThread, &ctx);
+    }
+}
+
 LONG WINAPI Breakpoint::ExceptionHandler(PEXCEPTION_POINTERS ex) {
     if (ex->ExceptionRecord->ExceptionCode == EXCEPTION_SINGLE_STEP) {
         DWORD_PTR hitAddress = (DWORD_PTR)ex->ExceptionRecord->ExceptionAddress;
 
-        // Find which breakpoint was hit
+        // Check if this single-step was from our breakpoint
         for (int i = 0; i < 4; i++) {
-            if (s_breakpoints[i].enabled && s_breakpoints[i].address == hitAddress) {
+            if (s_breakpoints[i].singleStepping) {
+                // Re-enable the breakpoint now that we've single-stepped
+                EnableBreakpoint(i);
+                return EXCEPTION_CONTINUE_EXECUTION;
+            }
+        }
+
+        // Handle regular breakpoint hits
+        for (int i = 0; i < 4; i++) {
+            if (s_breakpoints[i].enabled && s_breakpoints[i].address == hitAddress && !s_breakpoints[i].singleStepping) {
                 if (s_breakpoints[i].callback) {
                     s_breakpoints[i].callback(ex->ContextRecord);
                 }
+
+                // Disable breakpoint temporarily and single-step over the instruction
+                DisableBreakpoint(i);
+                SingleStepInstruction(GetCurrentThread());
+
                 return EXCEPTION_CONTINUE_EXECUTION;
             }
         }
@@ -94,7 +132,7 @@ bool Breakpoint::Set(DWORD_PTR address, Callback callback) {
     }
 
     // Store breakpoint info
-    s_breakpoints[drIndex] = { address, callback, drIndex, true };
+    s_breakpoints[drIndex] = { address, callback, drIndex, true, false };
 
     // Update hardware registers
     UpdateDebugRegisters();
@@ -108,6 +146,7 @@ bool Breakpoint::Remove(DWORD_PTR address) {
         if (s_breakpoints[i].enabled && s_breakpoints[i].address == address) {
             s_breakpoints[i].enabled = false;
             s_breakpoints[i].callback = nullptr;
+            s_breakpoints[i].singleStepping = false;
 
             UpdateDebugRegisters();
 
@@ -122,6 +161,7 @@ void Breakpoint::RemoveAll() {
     for (int i = 0; i < 4; i++) {
         s_breakpoints[i].enabled = false;
         s_breakpoints[i].callback = nullptr;
+        s_breakpoints[i].singleStepping = false;
     }
 
     UpdateDebugRegisters();

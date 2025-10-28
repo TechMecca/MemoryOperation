@@ -24,6 +24,7 @@ private:
         Callback callback;
         int drIndex;
         bool enabled;
+        bool singleStepping;
     };
 
     static BPInfo s_breakpoints[4];
@@ -33,4 +34,7 @@ private:
     static void InstallHandler();
     static int FindFreeDebugRegister();
     static void UpdateDebugRegisters();
+    static void DisableBreakpoint(int drIndex);
+    static void EnableBreakpoint(int drIndex);
+    static void SingleStepInstruction(HANDLE hThread);
 };
