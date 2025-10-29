@@ -1,173 +1,217 @@
 #include "Breakpoint.h"
 #include <stdio.h>
 
-// Static members initialization
-Breakpoint::BPInfo Breakpoint::s_breakpoints[4];
+// Static member initialization
+Breakpoint::BPInfo Breakpoint::s_breakpoints[4] = {};
 bool Breakpoint::s_handlerInstalled = false;
+PVOID Breakpoint::s_vehHandle = nullptr;
 
+// Install the vectored exception handler (once)
 void Breakpoint::InstallHandler() {
     if (!s_handlerInstalled) {
-        AddVectoredExceptionHandler(1, ExceptionHandler);
-        s_handlerInstalled = true;
+        s_vehHandle = AddVectoredExceptionHandler(1, ExceptionHandler);
+        s_handlerInstalled = (s_vehHandle != nullptr);
     }
 }
 
+// Find a free debug register (DR0-DR3)
 int Breakpoint::FindFreeDebugRegister() {
-    CONTEXT ctx = { 0 };
-    ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
-
-    if (!GetThreadContext(GetCurrentThread(), &ctx)) {
-        return -1;
+    for (int i = 0; i < 4; i++) {
+        if (!s_breakpoints[i].enabled) {
+            return i;
+        }
     }
-
-    // Check which debug registers are available
-    if (!(ctx.Dr7 & 1)) return 0;   // DR0 free
-    if (!(ctx.Dr7 & 4)) return 1;   // DR1 free  
-    if (!(ctx.Dr7 & 16)) return 2;  // DR2 free
-    if (!(ctx.Dr7 & 64)) return 3;  // DR3 free
-
-    return -1; // No registers available
+    return -1;
 }
 
-void Breakpoint::UpdateDebugRegisters() {
-    CONTEXT ctx = { 0 };
-    ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
-
-    if (!GetThreadContext(GetCurrentThread(), &ctx)) {
-        return;
-    }
-
-    // Clear all debug registers
-    ctx.Dr0 = 0;
-    ctx.Dr1 = 0;
-    ctx.Dr2 = 0;
-    ctx.Dr3 = 0;
+// Apply all active breakpoints to a given context
+void Breakpoint::ApplyBreakpointsToContext(CONTEXT& ctx) {
     ctx.Dr7 = 0;
 
-    // Re-set all active breakpoints
     for (int i = 0; i < 4; i++) {
-        if (s_breakpoints[i].enabled && !s_breakpoints[i].singleStepping) {
+        if (s_breakpoints[i].enabled) {
             switch (i) {
             case 0: ctx.Dr0 = s_breakpoints[i].address; break;
             case 1: ctx.Dr1 = s_breakpoints[i].address; break;
             case 2: ctx.Dr2 = s_breakpoints[i].address; break;
             case 3: ctx.Dr3 = s_breakpoints[i].address; break;
             }
-            ctx.Dr7 |= (1 << (2 * i)); // Enable breakpoint
+
+            // Set DR7 bits for execution breakpoint (RW=00, LEN=00, L=1)
+            // L bit (local enable) is at position (i * 2)
+            ctx.Dr7 |= (1ULL << (i * 2));
+
+            // Condition bits: RW (bits 16-17, 20-21, 24-25, 28-29) = 00 for execution
+            // LEN bits (bits 18-19, 22-23, 26-27, 30-31) = 00 for 1 byte
+            // These are already 0, so no need to set them
         }
     }
 
-    SetThreadContext(GetCurrentThread(), &ctx);
+    // Enable general and local exact breakpoint detection
+    ctx.Dr7 |= 0x300;
 }
 
-void Breakpoint::DisableBreakpoint(int drIndex) {
-    if (drIndex < 0 || drIndex > 3) return;
+// Update debug registers in the current thread
+void Breakpoint::UpdateDebugRegisters() {
+    CONTEXT ctx = {};
+    ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
 
-    s_breakpoints[drIndex].singleStepping = true;
-    UpdateDebugRegisters();
-}
-
-void Breakpoint::EnableBreakpoint(int drIndex) {
-    if (drIndex < 0 || drIndex > 3) return;
-
-    s_breakpoints[drIndex].singleStepping = false;
-    UpdateDebugRegisters();
-}
-
-void Breakpoint::SingleStepInstruction(HANDLE hThread) {
-    CONTEXT ctx = { 0 };
-    ctx.ContextFlags = CONTEXT_CONTROL;
-
+    HANDLE hThread = GetCurrentThread();
     if (GetThreadContext(hThread, &ctx)) {
-        ctx.EFlags |= 0x100; // Set trap flag for single step
+        ApplyBreakpointsToContext(ctx);
         SetThreadContext(hThread, &ctx);
     }
 }
 
-LONG WINAPI Breakpoint::ExceptionHandler(PEXCEPTION_POINTERS ex) {
-    if (ex->ExceptionRecord->ExceptionCode == EXCEPTION_SINGLE_STEP) {
-        DWORD_PTR hitAddress = (DWORD_PTR)ex->ExceptionRecord->ExceptionAddress;
+// Disable a specific breakpoint by index
+void Breakpoint::DisableBreakpoint(int drIndex) {
+    if (drIndex < 0 || drIndex >= 4) return;
 
-        // Check if this single-step was from our breakpoint
+    CONTEXT ctx = {};
+    ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
+    HANDLE hThread = GetCurrentThread();
+
+    if (GetThreadContext(hThread, &ctx)) {
+        // Clear the local enable bit for this DR
+        ctx.Dr7 &= ~(1ULL << (drIndex * 2));
+        SetThreadContext(hThread, &ctx);
+    }
+}
+
+// Enable a specific breakpoint by index
+void Breakpoint::EnableBreakpoint(int drIndex) {
+    if (drIndex < 0 || drIndex >= 4) return;
+    UpdateDebugRegisters();
+}
+
+// Main exception handler
+LONG WINAPI Breakpoint::ExceptionHandler(PEXCEPTION_POINTERS ex) {
+    DWORD exceptionCode = ex->ExceptionRecord->ExceptionCode;
+
+    // Handle single-step exception (for re-enabling breakpoints)
+    if (exceptionCode == EXCEPTION_SINGLE_STEP) {
+        PCONTEXT ctx = ex->ContextRecord;
+
+        // Check if this was our single-step
+        bool ourStep = false;
         for (int i = 0; i < 4; i++) {
             if (s_breakpoints[i].singleStepping) {
-                // Re-enable the breakpoint now that we've single-stepped
-                EnableBreakpoint(i);
-                return EXCEPTION_CONTINUE_EXECUTION;
+                s_breakpoints[i].singleStepping = false;
+                ourStep = true;
             }
         }
 
-        // Handle regular breakpoint hits
+        if (ourStep) {
+            // Re-enable all breakpoints
+            ApplyBreakpointsToContext(*ctx);
+            ctx->EFlags &= ~0x100; // Clear trap flag
+            return EXCEPTION_CONTINUE_EXECUTION;
+        }
+
+        // Check which debug register triggered
+        DWORD_PTR dr6 = ctx->Dr6;
+
         for (int i = 0; i < 4; i++) {
-            if (s_breakpoints[i].enabled && s_breakpoints[i].address == hitAddress && !s_breakpoints[i].singleStepping) {
-                if (s_breakpoints[i].callback) {
-                    s_breakpoints[i].callback(ex->ContextRecord);
+            if ((dr6 & (1ULL << i)) && s_breakpoints[i].enabled) {
+                DWORD_PTR hitAddr;
+#ifdef _WIN64
+                hitAddr = ctx->Rip;
+#else
+                hitAddr = ctx->Eip;
+#endif
+
+                if (hitAddr == s_breakpoints[i].address) {
+                    // Call the user callback
+                    if (s_breakpoints[i].callback) {
+                        s_breakpoints[i].callback(ctx);
+                    }
+
+                    // Temporarily disable this breakpoint and enable single-step
+                    switch (i) {
+                    case 0: ctx->Dr0 = 0; break;
+                    case 1: ctx->Dr1 = 0; break;
+                    case 2: ctx->Dr2 = 0; break;
+                    case 3: ctx->Dr3 = 0; break;
+                    }
+                    ctx->Dr7 &= ~(1ULL << (i * 2));
+
+                    // Set trap flag for single-step
+                    ctx->EFlags |= 0x100;
+                    s_breakpoints[i].singleStepping = true;
+
+                    // Clear the debug status register
+                    ctx->Dr6 = 0;
+
+                    return EXCEPTION_CONTINUE_EXECUTION;
                 }
-
-                // Disable breakpoint temporarily and single-step over the instruction
-                DisableBreakpoint(i);
-                SingleStepInstruction(GetCurrentThread());
-
-                return EXCEPTION_CONTINUE_EXECUTION;
             }
         }
+
+        // Clear Dr6 to acknowledge the exception
+        ctx->Dr6 = 0;
     }
+
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
+// Set a hardware breakpoint
 bool Breakpoint::Set(DWORD_PTR address, Callback callback) {
-    if (!address || !callback) {
+    if (!callback || address == 0) {
+        return false;
+    }
+
+    // Check if already set
+    if (IsSet(address)) {
         return false;
     }
 
     InstallHandler();
 
-    // Remove existing breakpoint at this address
-    Remove(address);
-
     int drIndex = FindFreeDebugRegister();
-    if (drIndex == -1) {
-        printf("[Breakpoint] No debug registers available! Maximum of 4 breakpoints supported.\n");
-        return false;
+    if (drIndex < 0) {
+        return false; // No free debug registers
     }
 
-    // Store breakpoint info
-    s_breakpoints[drIndex] = { address, callback, drIndex, true, false };
+    s_breakpoints[drIndex].address = address;
+    s_breakpoints[drIndex].callback = callback;
+    s_breakpoints[drIndex].index = drIndex;
+    s_breakpoints[drIndex].enabled = true;
+    s_breakpoints[drIndex].singleStepping = false;
 
-    // Update hardware registers
     UpdateDebugRegisters();
-
-    printf("[Breakpoint] Set at 0x%08X (DR%d)\n", address, drIndex);
     return true;
 }
 
+// Remove a hardware breakpoint
 bool Breakpoint::Remove(DWORD_PTR address) {
     for (int i = 0; i < 4; i++) {
         if (s_breakpoints[i].enabled && s_breakpoints[i].address == address) {
             s_breakpoints[i].enabled = false;
+            s_breakpoints[i].address = 0;
             s_breakpoints[i].callback = nullptr;
+            s_breakpoints[i].index = -1;
             s_breakpoints[i].singleStepping = false;
 
             UpdateDebugRegisters();
-
-            printf("[Breakpoint] Removed at 0x%08X\n", address);
             return true;
         }
     }
     return false;
 }
 
+// Remove all breakpoints
 void Breakpoint::RemoveAll() {
     for (int i = 0; i < 4; i++) {
         s_breakpoints[i].enabled = false;
+        s_breakpoints[i].address = 0;
         s_breakpoints[i].callback = nullptr;
+        s_breakpoints[i].index = -1;
         s_breakpoints[i].singleStepping = false;
     }
-
     UpdateDebugRegisters();
-    printf("[Breakpoint] All breakpoints removed\n");
 }
 
+// Check if a breakpoint is set at an address
 bool Breakpoint::IsSet(DWORD_PTR address) {
     for (int i = 0; i < 4; i++) {
         if (s_breakpoints[i].enabled && s_breakpoints[i].address == address) {
@@ -177,6 +221,7 @@ bool Breakpoint::IsSet(DWORD_PTR address) {
     return false;
 }
 
+// Get count of active breakpoints
 int Breakpoint::GetCount() {
     int count = 0;
     for (int i = 0; i < 4; i++) {
@@ -187,48 +232,33 @@ int Breakpoint::GetCount() {
     return count;
 }
 
+// Utility: Print register values from context
 void Breakpoint::PrintRegisters(PCONTEXT ctx) {
-    if (!ctx) return;
-
-    printf("=== CPU Registers ===\n");
-    printf("EAX: 0x%08X\n", ctx->Eax);
-    printf("EBX: 0x%08X\n", ctx->Ebx);
-    printf("ECX: 0x%08X\n", ctx->Ecx);
-    printf("EDX: 0x%08X\n", ctx->Edx);
-    printf("ESI: 0x%08X\n", ctx->Esi);
-    printf("EDI: 0x%08X\n", ctx->Edi);
-    printf("EBP: 0x%08X\n", ctx->Ebp);
-    printf("ESP: 0x%08X\n", ctx->Esp);
+#ifdef _WIN64
+    printf("RAX: 0x%016llX  RBX: 0x%016llX\n", ctx->Rax, ctx->Rbx);
+    printf("RCX: 0x%016llX  RDX: 0x%016llX\n", ctx->Rcx, ctx->Rdx);
+    printf("RSI: 0x%016llX  RDI: 0x%016llX\n", ctx->Rsi, ctx->Rdi);
+    printf("RBP: 0x%016llX  RSP: 0x%016llX\n", ctx->Rbp, ctx->Rsp);
+    printf("RIP: 0x%016llX\n", ctx->Rip);
+    printf("R8:  0x%016llX  R9:  0x%016llX\n", ctx->R8, ctx->R9);
+    printf("R10: 0x%016llX  R11: 0x%016llX\n", ctx->R10, ctx->R11);
+    printf("R12: 0x%016llX  R13: 0x%016llX\n", ctx->R12, ctx->R13);
+    printf("R14: 0x%016llX  R15: 0x%016llX\n", ctx->R14, ctx->R15);
+#else
+    printf("EAX: 0x%08X  EBX: 0x%08X\n", ctx->Eax, ctx->Ebx);
+    printf("ECX: 0x%08X  EDX: 0x%08X\n", ctx->Ecx, ctx->Edx);
+    printf("ESI: 0x%08X  EDI: 0x%08X\n", ctx->Esi, ctx->Edi);
+    printf("EBP: 0x%08X  ESP: 0x%08X\n", ctx->Ebp, ctx->Esp);
     printf("EIP: 0x%08X\n", ctx->Eip);
-    printf("EFLAGS: 0x%08X\n", ctx->EFlags);
-
-    // Stack contents
-    printf("\n=== Stack (top 8 values) ===\n");
-    DWORD* esp = (DWORD*)ctx->Esp;
-    for (int i = 0; i < 8; i++) {
-        DWORD value = 0;
-        if (esp && !IsBadReadPtr(esp, sizeof(DWORD))) {
-            value = *esp;
-        }
-        printf("ESP+%d: 0x%08X\n", i * 4, value);
-        esp++;
-    }
-    printf("=============================\n\n");
+#endif
 }
 
-DWORD Breakpoint::GetRegisterValue(PCONTEXT ctx, const char* regName) {
-    if (!ctx || !regName) return 0;
-
-    if (_stricmp(regName, "eax") == 0) return ctx->Eax;
-    if (_stricmp(regName, "ebx") == 0) return ctx->Ebx;
-    if (_stricmp(regName, "ecx") == 0) return ctx->Ecx;
-    if (_stricmp(regName, "edx") == 0) return ctx->Edx;
-    if (_stricmp(regName, "esi") == 0) return ctx->Esi;
-    if (_stricmp(regName, "edi") == 0) return ctx->Edi;
-    if (_stricmp(regName, "ebp") == 0) return ctx->Ebp;
-    if (_stricmp(regName, "esp") == 0) return ctx->Esp;
-    if (_stricmp(regName, "eip") == 0) return ctx->Eip;
-
-    printf("[Breakpoint] Unknown register: %s\n", regName);
-    return 0;
+// Get breakpoint info for a specific address
+Breakpoint::BPInfo* Breakpoint::GetBreakpointInfo(DWORD_PTR address) {
+    for (int i = 0; i < 4; i++) {
+        if (s_breakpoints[i].enabled && s_breakpoints[i].address == address) {
+            return &s_breakpoints[i];
+        }
+    }
+    return nullptr;
 }
