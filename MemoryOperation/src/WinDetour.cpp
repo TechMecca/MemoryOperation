@@ -79,9 +79,7 @@ bool WinDetour::Apply()
     // After commit, targetStorage now points to the trampoline (the original function).
     is_modified = true;
 
-    std::cout << "Detour applied: target=0x" << std::hex << this->targetAddress
-        << " trampoline=0x" << reinterpret_cast<uintptr_t>(targetStorage)
-        << std::dec << "\n";
+   
     return true;
 }
 

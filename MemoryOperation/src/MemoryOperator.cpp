@@ -59,7 +59,7 @@ WinDetour* MemoryOperator::CreateDetour(const std::string& name,
 
         WinDetour* raw = detour.get();
         ops.emplace(name, std::move(detour));
-        std::cout << "CreateDetour: created '" << name << "'\n";
+       
         return raw;
     }
     catch (const std::exception& e) {
