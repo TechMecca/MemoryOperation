@@ -1,4 +1,6 @@
 ﻿cmake_minimum_required(VERSION 3.24)
+add_compile_definitions(_X86_=1)
+set(CMAKE_SIZEOF_VOID_P 4 CACHE STRING "Pointer size" FORCE)
 project(MemoryOperationProject VERSION 0.4.33 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
