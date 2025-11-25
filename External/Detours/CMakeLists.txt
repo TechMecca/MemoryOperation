@@ -1,50 +1,29 @@
 cmake_minimum_required(VERSION 3.24)
 
-include(ExternalProject)
+# Use the prebuilt Detours library instead of building from source
+set(DETOURS_PREBUILT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/prebuilt")
+set(DETOURS_INCLUDE_DIR  "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-# Use NEW behavior for download extraction timestamps
-cmake_policy(SET CMP0135 NEW)
-
-# ---- Detours repo + arch mapping ----
-set(DETOURS_GIT_REPO "https://github.com/microsoft/Detours.git")
-set(DETOURS_GIT_TAG  "v4.0.1")
-
+# Set the library file based on architecture
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(DETOURS_ARCH "X64")
+    set(DETOURS_LIB "${DETOURS_PREBUILT_DIR}/x64/detours.lib")
 else()
-    set(DETOURS_ARCH "X86")
+    set(DETOURS_LIB "${DETOURS_PREBUILT_DIR}/detours.lib")
 endif()
 
-# Per-arch checkout to avoid collisions if you build both x86/x64
-set(DETOURS_ROOT     "${CMAKE_BINARY_DIR}/_deps/detours-${DETOURS_ARCH}")
-set(DETOURS_REPO_DIR "${DETOURS_ROOT}")
-set(DETOURS_BUILDWD  "${DETOURS_REPO_DIR}/src")
-set(DETOURS_OUT_LIB  "${DETOURS_REPO_DIR}/lib.${DETOURS_ARCH}/detours.lib")
-set(DETOURS_OUT_INC  "${DETOURS_REPO_DIR}/include")
+# Verify the library exists
+if(NOT EXISTS "${DETOURS_LIB}")
+    message(FATAL_ERROR "Detours library not found at: ${DETOURS_LIB}")
+endif()
 
-file(MAKE_DIRECTORY "${DETOURS_OUT_INC}")
-
-ExternalProject_Add(detours_ep
-        GIT_REPOSITORY      ${DETOURS_GIT_REPO}
-        GIT_TAG             ${DETOURS_GIT_TAG}
-        GIT_PROGRESS        ON
-        UPDATE_DISCONNECTED 1
-        SOURCE_DIR          ${DETOURS_REPO_DIR}
-        CONFIGURE_COMMAND   ""            # no configure step
-        BUILD_BYPRODUCTS    ${DETOURS_OUT_LIB}
-        BUILD_IN_SOURCE     1
-        BUILD_COMMAND       ${CMAKE_COMMAND} -E chdir ${DETOURS_BUILDWD} nmake DETOURS_TARGET_PROCESSOR=${DETOURS_ARCH}
-        INSTALL_COMMAND     ""
-        LOG_BUILD           1
-)
-
-# Imported target other targets can link to
+# Create imported target
 add_library(Detours STATIC IMPORTED GLOBAL)
 set_target_properties(Detours PROPERTIES
-        IMPORTED_LOCATION             "${DETOURS_OUT_LIB}"
-        INTERFACE_INCLUDE_DIRECTORIES "${DETOURS_OUT_INC}"
+    IMPORTED_LOCATION             "${DETOURS_LIB}"
+    INTERFACE_INCLUDE_DIRECTORIES "${DETOURS_INCLUDE_DIR}"
 )
-add_dependencies(Detours detours_ep)
 
 # Nice namespaced alias
 add_library(Detours::Detours ALIAS Detours)
+
+message(STATUS "Using prebuilt Detours library: ${DETOURS_LIB}")
